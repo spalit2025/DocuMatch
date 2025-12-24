@@ -1,0 +1,134 @@
+[
+  {
+    "scenario_id": "exact_01",
+    "vendor": "Acme Consulting",
+    "description": "Perfect match - Senior Consultant services",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-ACME-001",
+    "invoice_number": "INV-ACME-001"
+  },
+  {
+    "scenario_id": "exact_02",
+    "vendor": "TechPro Solutions",
+    "description": "Perfect match - Software development services",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-TECH-001",
+    "invoice_number": "INV-TECH-001"
+  },
+  {
+    "scenario_id": "exact_03",
+    "vendor": "DataWise Analytics",
+    "description": "Perfect match - Data analysis project",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-DATA-001",
+    "invoice_number": "INV-DATA-001"
+  },
+  {
+    "scenario_id": "exact_04",
+    "vendor": "CloudScale Infrastructure",
+    "description": "Perfect match - Cloud services",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-CLOUD-001",
+    "invoice_number": "INV-CLOUD-001"
+  },
+  {
+    "scenario_id": "exact_05",
+    "vendor": "SecureNet Cyber",
+    "description": "Perfect match - Security audit",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-SEC-001",
+    "invoice_number": "INV-SEC-001"
+  },
+  {
+    "scenario_id": "exact_06",
+    "vendor": "DesignHub Creative",
+    "description": "Perfect match - UX design project",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-DESIGN-001",
+    "invoice_number": "INV-DESIGN-001"
+  },
+  {
+    "scenario_id": "exact_07",
+    "vendor": "AgileWorks PM",
+    "description": "Perfect match - Project management",
+    "expected_status": "PASS",
+    "expected_matches_passed": 3,
+    "notes": "",
+    "has_contract": true,
+    "po_number": "PO-AGILE-001",
+    "invoice_number": "INV-AGILE-001"
+  },
+  {
+    "scenario_id": "partial_01",
+    "vendor": "BudgetTech Services",
+    "description": "Partial match - Invoice matches PO but rate exceeds contract",
+    "expected_status": "FAIL",
+    "expected_matches_passed": 1,
+    "notes": "Invoice\u2194PO: PASS, Invoice\u2194Contract: FAIL (rate), PO\u2194Contract: FAIL (rate)",
+    "has_contract": true,
+    "po_number": "PO-BUDGET-001",
+    "invoice_number": "INV-BUDGET-001"
+  },
+  {
+    "scenario_id": "partial_02",
+    "vendor": "FlexiStaff Solutions",
+    "description": "Partial match - Invoice matches contract but quantity differs from PO",
+    "expected_status": "PASS",
+    "expected_matches_passed": 2,
+    "notes": "Invoice\u2194PO: FAIL (quantity), Invoice\u2194Contract: PASS, PO\u2194Contract: PASS",
+    "has_contract": true,
+    "po_number": "PO-FLEXI-001",
+    "invoice_number": "INV-FLEXI-001"
+  },
+  {
+    "scenario_id": "mismatch_01",
+    "vendor": "GhostVendor Inc",
+    "description": "Full mismatch - No contract exists for vendor",
+    "expected_status": "FAIL",
+    "expected_matches_passed": 0,
+    "notes": "No contract indexed for this vendor",
+    "has_contract": false,
+    "po_number": "PO-GHOST-001",
+    "invoice_number": "INV-GHOST-001"
+  },
+  {
+    "scenario_id": "mismatch_02",
+    "vendor": "ExpiredContract LLC",
+    "description": "Full mismatch - Invoice outside contract period with wrong rates",
+    "expected_status": "FAIL",
+    "expected_matches_passed": 0,
+    "notes": "All matches fail: dates outside period, rates exceed limits, quantities mismatch",
+    "has_contract": true,
+    "po_number": "PO-EXPIRED-001",
+    "invoice_number": "INV-EXPIRED-001"
+  },
+  {
+    "scenario_id": "mismatch_03",
+    "vendor": "ChaosVendor Corp",
+    "description": "Full mismatch - Everything is wrong",
+    "expected_status": "FAIL",
+    "expected_matches_passed": 0,
+    "notes": "Invoice doesn't match PO, rates exceed contract, dates questionable",
+    "has_contract": true,
+    "po_number": "PO-CHAOS-001",
+    "invoice_number": "INV-CHAOS-001"
+  }
+]

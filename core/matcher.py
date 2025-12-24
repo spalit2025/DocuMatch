@@ -417,21 +417,48 @@ class Matcher:
         return None
 
     def _fuzzy_match(self, text1: str, text2: str) -> bool:
-        """Check if two strings have significant overlap."""
+        """
+        Check if two strings represent the same role/item.
+
+        Uses strict matching to avoid false positives like
+        "Data Scientist" matching "Data Analyst".
+        """
+        # Normalize strings
+        text1 = text1.lower().strip()
+        text2 = text2.lower().strip()
+
+        # Exact match
+        if text1 == text2:
+            return True
+
+        # One contains the other (for partial matches like "Senior Consultant" vs "Senior Consultant Services")
+        if text1 in text2 or text2 in text1:
+            return True
+
+        # Word-based matching with strict criteria
         words1 = set(text1.split())
         words2 = set(text2.split())
 
-        # Remove common words
-        stopwords = {'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', '-'}
-        words1 = words1 - stopwords
-        words2 = words2 - stopwords
+        # Remove common stopwords and modifiers
+        stopwords = {'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', '-', 'services', 'service', 'senior', 'junior', 'lead'}
+        core_words1 = words1 - stopwords
+        core_words2 = words2 - stopwords
 
-        if not words1 or not words2:
-            return False
+        if not core_words1 or not core_words2:
+            # If no core words remain, fall back to original words
+            core_words1 = words1
+            core_words2 = words2
 
-        # Check for word overlap
-        common = words1 & words2
-        return len(common) >= 1
+        # Strict matching: ALL core words must match for short phrases
+        # This prevents "Data Scientist" from matching "Data Analyst"
+        if len(core_words1) <= 2 and len(core_words2) <= 2:
+            # For short phrases, require exact core word match
+            return core_words1 == core_words2
+
+        # For longer phrases, require significant overlap (at least 2/3)
+        common = core_words1 & core_words2
+        smaller_set = min(len(core_words1), len(core_words2))
+        return len(common) >= max(2, smaller_set * 0.67)
 
     def _build_result(
         self,
@@ -704,8 +731,14 @@ class Matcher:
         score -= len(line_issues) * 0.1
 
         # Determine if match passed
+        # Invoice↔PO match requires NO critical issues AND NO error issues with significant mismatches
         has_critical = any(i.severity == "critical" for i in issues)
-        passed = not has_critical and score >= 0.5
+        has_total_mismatch = any(i.rule == "total_match" for i in issues)
+        has_qty_or_price_errors = any(i.rule in ("line_qty_match", "line_price_match") for i in issues)
+
+        # Stricter: fail if there's a total mismatch or both qty and price errors
+        significant_errors = has_total_mismatch and has_qty_or_price_errors
+        passed = not has_critical and not significant_errors and score >= 0.6
 
         return MatchDetail(
             match_type="invoice_po",

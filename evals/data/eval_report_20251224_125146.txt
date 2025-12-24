@@ -1,0 +1,168 @@
+======================================================================
+DOCUMATCH THREE-WAY MATCHING EVALUATION REPORT
+======================================================================
+Generated: 2025-12-24 12:51:46
+
+----------------------------------------------------------------------
+SUMMARY
+----------------------------------------------------------------------
+Total Scenarios:     12
+  - Exact Match:     7
+  - Partial Match:   2
+  - Full Mismatch:   3
+
+----------------------------------------------------------------------
+OVERALL METRICS
+----------------------------------------------------------------------
+Status Accuracy:     100.0% (12/12)
+Matches Accuracy:    91.7% (11/12)
+
+Precision (PASS):    100.0%
+Recall (PASS):       100.0%
+F1 Score:            100.0%
+
+----------------------------------------------------------------------
+CONFUSION MATRIX (Status Prediction)
+----------------------------------------------------------------------
+                    Predicted
+                    PASS    FAIL
+Actual PASS            8       0
+       FAIL            0       4
+
+----------------------------------------------------------------------
+ACCURACY BY CATEGORY
+----------------------------------------------------------------------
+Exact Match (7):     100.0%
+Partial Match (2):   100.0%
+Full Mismatch (3):   100.0%
+
+----------------------------------------------------------------------
+DETAILED RESULTS
+----------------------------------------------------------------------
+
+exact_01: Acme Consulting
+  Description: Perfect match - Senior Consultant services
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_02: TechPro Solutions
+  Description: Perfect match - Software development services
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_03: DataWise Analytics
+  Description: Perfect match - Data analysis project
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_04: CloudScale Infrastructure
+  Description: Perfect match - Cloud services
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_05: SecureNet Cyber
+  Description: Perfect match - Security audit
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_06: DesignHub Creative
+  Description: Perfect match - UX design project
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+exact_07: AgileWorks PM
+  Description: Perfect match - Project management
+  Expected: PASS (3 matches)
+  Actual:   PASS (3 matches)
+  Status: ✓ | Matches: ✓ | Score: 1.00
+    Invoice↔PO: PASS
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+
+partial_01: BudgetTech Services
+  Description: Partial match - Invoice matches PO but rate exceeds contract
+  Expected: FAIL (1 matches)
+  Actual:   FAIL (1 matches)
+  Status: ✓ | Matches: ✓ | Score: 0.80
+    Invoice↔PO: PASS
+    Invoice↔Contract: FAIL
+    PO↔Contract: FAIL
+  Issues (2):
+    - [critical] rate_compliance: Rate for 'Developer' ($130.00/hr) exceeds contract rate for 'Developer' ($100.00/hr)
+    - [critical] po_rate_compliance: PO rate for 'Developer' ($130.00) exceeds contract rate for 'Developer' ($100.00)
+
+partial_02: FlexiStaff Solutions
+  Description: Partial match - Invoice matches contract but quantity differs from PO
+  Expected: PASS (2 matches)
+  Actual:   PASS (2 matches)
+  Status: ✓ | Matches: ✓ | Score: 0.90
+    Invoice↔PO: FAIL
+    Invoice↔Contract: PASS
+    PO↔Contract: PASS
+  Issues (2):
+    - [error] total_match: Invoice total ($7200.00) differs from PO total ($4800.00)
+    - [error] line_qty_match: Quantity mismatch for 'Consultant': Invoice=60.0, PO=40.0
+
+mismatch_01: GhostVendor Inc
+  Description: Full mismatch - No contract exists for vendor
+  Expected: FAIL (0 matches)
+  Actual:   FAIL (1 matches)
+  Status: ✓ | Matches: ✗ | Score: 0.33
+    Invoice↔PO: PASS
+    Invoice↔Contract: FAIL
+    PO↔Contract: FAIL
+  Issues (2):
+    - [critical] contract_exists: No contract found for vendor 'GhostVendor Inc'
+    - [critical] contract_exists: No contract found for vendor 'GhostVendor Inc'
+
+mismatch_02: ExpiredContract LLC
+  Description: Full mismatch - Invoice outside contract period with wrong rates
+  Expected: FAIL (0 matches)
+  Actual:   FAIL (0 matches)
+  Status: ✓ | Matches: ✓ | Score: 0.67
+    Invoice↔PO: FAIL
+    Invoice↔Contract: FAIL
+    PO↔Contract: FAIL
+  Issues (5):
+    - [error] total_match: Invoice total ($10000.00) differs from PO total ($5400.00)
+    - [error] line_qty_match: Quantity mismatch for 'Engineer': Invoice=50.0, PO=30.0
+    - [error] line_price_match: Price mismatch for 'Engineer': Invoice=$200.00, PO=$180.00
+    - [critical] rate_compliance: Rate for 'Engineer' ($200.00/hr) exceeds contract rate for 'Engineer' ($100.00/hr)
+    - [critical] po_rate_compliance: PO rate for 'Engineer' ($180.00) exceeds contract rate for 'Engineer' ($100.00)
+
+mismatch_03: ChaosVendor Corp
+  Description: Full mismatch - Everything is wrong
+  Expected: FAIL (0 matches)
+  Actual:   FAIL (0 matches)
+  Status: ✓ | Matches: ✓ | Score: 0.70
+    Invoice↔Contract: FAIL
+  Issues (1):
+    - [critical] rate_compliance: Rate for 'Premium Specialist' ($300.00/hr) exceeds contract rate for 'Specialist' ($150.00/hr)
+
+======================================================================
+END OF REPORT
+======================================================================
