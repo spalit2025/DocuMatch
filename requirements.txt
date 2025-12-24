@@ -1,0 +1,32 @@
+# DocuMatch Architect Dependencies
+# Python 3.10+ required
+
+# Web Framework
+streamlit>=1.30.0
+
+# Document Parsing
+docling>=2.0.0
+pdfplumber>=0.10.0
+pdf2image>=1.16.0
+
+# AI/ML
+ollama>=0.3.0
+chromadb>=0.4.0
+fastembed>=0.3.0
+
+# Data Validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Development (optional)
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.0.0
