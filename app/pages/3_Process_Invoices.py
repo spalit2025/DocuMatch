@@ -20,6 +20,7 @@ from core.po_store import POStore
 from core.extraction import ExtractionEngine, ExtractionError
 from core.matcher import Matcher
 from core.models import ThreeWayMatchResult
+from app.styles import inject_styles, COLORS
 
 # Initialize components
 parser = ParserEngine(fallback_enabled=settings.parser_fallback_enabled)
@@ -41,15 +42,13 @@ matcher = Matcher(
 )
 
 st.set_page_config(
-    page_title="Process Invoices - DocuMatch",
+    page_title="Process Invoices - PDM",
     page_icon="📄",
     layout="wide",
 )
 
-st.title("📄 Invoice Processing")
-st.markdown("Upload invoices and validate them using **three-way matching** (Invoice ↔ PO ↔ Contract).")
-
-st.markdown("---")
+# Inject styles
+inject_styles()
 
 # Initialize session state
 if "invoice_parsed" not in st.session_state:
@@ -68,147 +67,302 @@ if "three_way_result" not in st.session_state:
 # Check Ollama status
 ollama_ok, ollama_msg = extraction_engine.check_connection()
 
-# Upload Section
+# Get stats
+try:
+    vs_stats = vector_store.get_stats()
+    po_stats = po_store.get_stats()
+except Exception:
+    vs_stats = {"total_vendors": 0, "total_chunks": 0}
+    po_stats = {"total_pos": 0, "total_vendors": 0}
+
+
+# ===== SIDEBAR =====
+with st.sidebar:
+    st.markdown("### PDM")
+    st.caption("Invoice Processing")
+
+    st.markdown("---")
+
+    # System Status - Compact
+    st.markdown("##### Status")
+
+    # Compact status rows
+    status_html = ""
+
+    # Parser
+    parser_status = "Docling" if parser._docling_available else "pdfplumber"
+    status_html += f"""
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.8rem;">
+        <span style="width: 6px; height: 6px; background: #22C55E; border-radius: 50%;"></span>
+        <span style="color: #94A3B8;">Parser</span>
+        <span style="color: #64748B; margin-left: auto;">{parser_status}</span>
+    </div>
+    """
+
+    # LLM
+    if ollama_ok:
+        status_html += f"""
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.8rem;">
+            <span style="width: 6px; height: 6px; background: #22C55E; border-radius: 50%;"></span>
+            <span style="color: #94A3B8;">LLM</span>
+            <span style="color: #64748B; margin-left: auto;">{settings.default_model}</span>
+        </div>
+        """
+    else:
+        status_html += f"""
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.8rem;">
+            <span style="width: 6px; height: 6px; background: #EF4444; border-radius: 50%;"></span>
+            <span style="color: #94A3B8;">LLM</span>
+            <span style="color: #EF4444; margin-left: auto;">Offline</span>
+        </div>
+        """
+
+    st.markdown(status_html, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Data counts
+    st.markdown("##### Data")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"""
+        <div style="background: rgba(139, 92, 246, 0.1); border-radius: 6px; padding: 10px; text-align: center;">
+            <div style="font-size: 1.25rem; font-weight: 600; color: #8B5CF6;">{vs_stats.get('total_vendors', 0)}</div>
+            <div style="font-size: 0.65rem; color: #64748B;">CONTRACTS</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div style="background: rgba(34, 197, 94, 0.1); border-radius: 6px; padding: 10px; text-align: center;">
+            <div style="font-size: 1.25rem; font-weight: 600; color: #22C55E;">{po_stats.get('total_pos', 0)}</div>
+            <div style="font-size: 0.65rem; color: #64748B;">POs</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Current session info
+    if st.session_state.three_way_result:
+        result = st.session_state.three_way_result
+        st.markdown("---")
+        st.markdown("##### Current Invoice")
+        st.markdown(f"""
+        <div style="font-size: 0.8rem; color: #94A3B8; padding: 8px 0;">
+            <div><strong style="color: #F8FAFC;">{result.invoice_number}</strong></div>
+            <div>{result.vendor_name}</div>
+            {f'<div>PO: {result.po_number}</div>' if result.po_number else ''}
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ===== MAIN CONTENT =====
+
+# Page Header
+st.markdown("""
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 1.75rem; font-weight: 700; color: #F8FAFC; margin-bottom: 4px; display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 1.5rem;">📄</span> Invoice Processing
+    </h1>
+    <p style="font-size: 0.9rem; color: #94A3B8; margin: 0;">
+        Upload invoices and validate with three-way matching
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# Progress indicator based on current state
+current_step = 0
+if st.session_state.invoice_parsed:
+    current_step = 1
+if st.session_state.invoice_extracted:
+    current_step = 2
+if st.session_state.three_way_result:
+    current_step = 3
+
+steps = ["Upload", "Parse", "Extract", "Validate"]
+step_html = '<div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0; margin-bottom: 24px;">'
+for i, step in enumerate(steps):
+    if i < current_step:
+        color = "#22C55E"
+        bg = "rgba(34, 197, 94, 0.2)"
+        icon = "✓"
+    elif i == current_step:
+        color = "#0EA5E9"
+        bg = "rgba(14, 165, 233, 0.2)"
+        icon = str(i + 1)
+    else:
+        color = "#64748B"
+        bg = "#334155"
+        icon = str(i + 1)
+
+    step_html += f'''
+    <div style="display: flex; align-items: center; gap: 6px;">
+        <div style="width: 28px; height: 28px; background: {bg}; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: {color}; font-size: 0.75rem; font-weight: 600;">{icon}</div>
+        <span style="color: {color}; font-size: 0.8rem; font-weight: 500;">{step}</span>
+    </div>
+    '''
+    if i < len(steps) - 1:
+        line_color = "#22C55E" if i < current_step else "#334155"
+        step_html += f'<div style="width: 40px; height: 2px; background: {line_color}; border-radius: 1px;"></div>'
+step_html += '</div>'
+st.markdown(step_html, unsafe_allow_html=True)
+
+# ===== UPLOAD & EXTRACTION SECTION =====
 uploaded_file = st.file_uploader(
-    "Upload Invoice PDF",
+    "Drop your invoice PDF here",
     type=["pdf"],
-    help=f"Maximum file size: {settings.max_file_size_mb}MB"
+    help=f"Maximum file size: {settings.max_file_size_mb}MB",
+    key="invoice_uploader"
 )
 
 if uploaded_file:
     # Save the file
     save_path = settings.invoices_path / uploaded_file.name
     save_path.parent.mkdir(parents=True, exist_ok=True)
-
     with open(save_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Split screen layout
-    left_col, right_col = st.columns(2)
+    # Two column layout
+    col_left, col_right = st.columns([1, 1])
 
-    with left_col:
-        st.subheader("Invoice Document")
+    with col_left:
+        st.markdown("""
+        <div style="font-size: 1rem; font-weight: 600; color: #F8FAFC; margin: 16px 0 12px 0;">
+            Document Processing
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Parse button
-        if st.button("Parse Invoice", key="parse_btn"):
-            with st.spinner("Parsing PDF..."):
-                result = parser.parse_to_markdown(str(save_path))
-                if result.success:
-                    st.session_state.invoice_parsed = result
-                    st.session_state.validation_result = None  # Reset validation
-                    st.success(f"Parsed with {result.parse_method}")
-                else:
-                    st.error(f"Parse failed: {result.error_message}")
+        # File info card
+        st.markdown(f"""
+        <div style="background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; background: rgba(14, 165, 233, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📄</div>
+                <div>
+                    <div style="color: #F8FAFC; font-weight: 500; font-size: 0.875rem;">{uploaded_file.name}</div>
+                    <div style="color: #64748B; font-size: 0.75rem;">{uploaded_file.size / 1024:.1f} KB</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Show parsed content
-        if st.session_state.invoice_parsed:
-            result = st.session_state.invoice_parsed
-            st.metric("Pages", result.page_count)
+        # Parse & Extract buttons
+        btn_col1, btn_col2 = st.columns(2)
 
-            with st.expander("View Parsed Content", expanded=False):
-                preview = result.markdown[:5000]
-                if len(result.markdown) > 5000:
-                    preview += "\n\n... (truncated)"
-                st.markdown(preview)
-        else:
-            st.info("Click 'Parse Invoice' to extract text from PDF")
+        with btn_col1:
+            if st.button("1. Parse PDF", key="parse_btn", use_container_width=True,
+                        disabled=st.session_state.invoice_parsed is not None):
+                with st.spinner("Parsing..."):
+                    result = parser.parse_to_markdown(str(save_path))
+                    if result.success:
+                        st.session_state.invoice_parsed = result
+                        st.session_state.invoice_extracted = None
+                        st.session_state.three_way_result = None
+                        st.rerun()
+                    else:
+                        st.error(f"Parse failed: {result.error_message}")
 
-        # File info
-        st.markdown("---")
-        st.caption(f"**File:** {uploaded_file.name}")
-        st.caption(f"**Size:** {uploaded_file.size / 1024:.1f} KB")
-
-    with right_col:
-        st.subheader("Extracted Data")
-
-        # Ollama status
-        if not ollama_ok:
-            st.error(f"Ollama: {ollama_msg}")
-            st.info("Start Ollama with: `ollama serve`")
-
-        # Extract button
-        extract_disabled = not (st.session_state.invoice_parsed and ollama_ok)
-        if st.button("Extract Invoice Data", type="primary", disabled=extract_disabled, key="extract_btn"):
-            with st.spinner("Extracting data with AI..."):
-                try:
-                    invoice = extraction_engine.extract_invoice_data(
-                        st.session_state.invoice_parsed.markdown
-                    )
-                    st.session_state.invoice_extracted = invoice
-                    st.session_state.validation_result = None  # Reset validation
-                    st.success("Extraction successful!")
-
-                    # Automatically fetch matching clauses
-                    if invoice.vendor_name:
-                        clauses = vector_store.retrieve_clauses(
-                            vendor_name=invoice.vendor_name,
-                            query="payment terms rates",
-                            top_k=5
+        with btn_col2:
+            extract_disabled = not (st.session_state.invoice_parsed and ollama_ok)
+            if st.button("2. Extract Data", key="extract_btn", use_container_width=True,
+                        disabled=extract_disabled, type="primary"):
+                with st.spinner("Extracting with AI..."):
+                    try:
+                        invoice = extraction_engine.extract_invoice_data(
+                            st.session_state.invoice_parsed.markdown
                         )
-                        st.session_state.matched_clauses = clauses
+                        st.session_state.invoice_extracted = invoice
+                        st.session_state.three_way_result = None
 
-                except ExtractionError as e:
-                    st.error(f"Extraction failed: {str(e)}")
-                except Exception as e:
-                    st.error(f"Unexpected error: {str(e)}")
+                        # Auto-fetch clauses
+                        if invoice.vendor_name:
+                            clauses = vector_store.retrieve_clauses(
+                                vendor_name=invoice.vendor_name,
+                                query="payment terms rates",
+                                top_k=5
+                            )
+                            st.session_state.matched_clauses = clauses
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Extraction failed: {str(e)}")
 
-        # Display extracted data
+        # Parse status
+        if st.session_state.invoice_parsed:
+            st.markdown(f"""
+            <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 12px; margin-top: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #22C55E;">✓</span>
+                    <span style="color: #22C55E; font-size: 0.875rem;">Parsed with {st.session_state.invoice_parsed.parse_method}</span>
+                    <span style="color: #64748B; font-size: 0.75rem; margin-left: auto;">{st.session_state.invoice_parsed.page_count} page(s)</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.expander("View parsed content"):
+                preview = st.session_state.invoice_parsed.markdown[:3000]
+                if len(st.session_state.invoice_parsed.markdown) > 3000:
+                    preview += "\n\n... (truncated)"
+                st.code(preview, language="markdown")
+
+    with col_right:
+        st.markdown("""
+        <div style="font-size: 1rem; font-weight: 600; color: #F8FAFC; margin: 16px 0 12px 0;">
+            Extracted Invoice Data
+        </div>
+        """, unsafe_allow_html=True)
+
         if st.session_state.invoice_extracted:
             invoice = st.session_state.invoice_extracted
 
-            st.markdown("---")
-
-            # Key fields
-            col1, col2 = st.columns(2)
-            with col1:
-                st.text_input("Vendor Name", value=invoice.vendor_name, key="vendor_edit", disabled=True)
-                st.text_input("Invoice Number", value=invoice.invoice_number, key="inv_num_edit", disabled=True)
-                st.text_input("Invoice Date", value=invoice.invoice_date, key="date_edit", disabled=True)
-
-            with col2:
-                st.text_input("Due Date", value=invoice.due_date or "", key="due_edit", disabled=True)
-                st.text_input("Total Amount", value=f"${invoice.total_amount:,.2f}", key="total_edit", disabled=True)
-                st.text_input("Currency", value=invoice.currency, key="currency_edit", disabled=True)
+            # Invoice summary card
+            st.markdown(f"""
+            <div style="background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 4px;">Vendor</div>
+                        <div style="color: #F8FAFC; font-weight: 600;">{invoice.vendor_name}</div>
+                    </div>
+                    <div>
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 4px;">Invoice #</div>
+                        <div style="color: #F8FAFC; font-weight: 600;">{invoice.invoice_number}</div>
+                    </div>
+                    <div>
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 4px;">Date</div>
+                        <div style="color: #94A3B8;">{invoice.invoice_date}</div>
+                    </div>
+                    <div>
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 4px;">Total</div>
+                        <div style="color: #0EA5E9; font-weight: 700; font-size: 1.25rem;">${invoice.total_amount:,.2f}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
             # Line items
-            st.markdown("#### Line Items")
             if invoice.line_items:
+                st.markdown("""
+                <div style="color: #94A3B8; font-size: 0.8rem; font-weight: 500; margin: 16px 0 8px 0;">
+                    Line Items
+                </div>
+                """, unsafe_allow_html=True)
+
                 items_data = [
                     {
-                        "Description": item.description,
+                        "Description": item.description[:30] + "..." if len(item.description) > 30 else item.description,
                         "Qty": item.quantity,
-                        "Unit Price": f"${item.unit_price:.2f}",
+                        "Rate": f"${item.unit_price:.2f}",
                         "Total": f"${item.total:.2f}"
                     }
                     for item in invoice.line_items
                 ]
-                st.dataframe(items_data, use_container_width=True)
-            else:
-                st.info("No line items extracted")
+                st.dataframe(items_data, use_container_width=True, hide_index=True)
 
-            # Additional fields
-            with st.expander("Additional Details"):
-                st.text_input("Payment Terms", value=invoice.payment_terms or "", disabled=True)
-                st.text_area("Billing Address", value=invoice.billing_address or "", disabled=True)
-
-            # Raw JSON view
-            with st.expander("Raw JSON"):
-                st.json(invoice.model_dump())
-
-            # PO Selection Section
+            # PO Selection
             st.markdown("---")
-            st.markdown("#### Link Purchase Order")
-
-            # Get available POs for this vendor
             vendor_pos = po_store.get_pos_by_vendor(invoice.vendor_name)
 
             if vendor_pos:
-                po_options = ["None (Skip PO matching)"] + [
-                    f"{po.po_number} - ${po.total_amount:,.2f} ({po.order_date})"
+                po_options = ["No PO (two-way match only)"] + [
+                    f"{po.po_number} (${po.total_amount:,.2f})"
                     for po in vendor_pos
                 ]
 
-                # Auto-detect PO from invoice if available
                 default_index = 0
                 if invoice.po_number:
                     for i, po in enumerate(vendor_pos):
@@ -216,99 +370,52 @@ if uploaded_file:
                             default_index = i + 1
                             break
 
-                selected_po_display = st.selectbox(
-                    "Select PO for Three-Way Matching",
+                selected = st.selectbox(
+                    "Link Purchase Order",
                     options=po_options,
                     index=default_index,
-                    help="Select a PO to enable full three-way matching",
                     key="po_selector"
                 )
 
-                if selected_po_display != "None (Skip PO matching)":
-                    po_number = selected_po_display.split(" - ")[0]
-                    st.session_state.selected_po = po_number
+                if selected != "No PO (two-way match only)":
+                    st.session_state.selected_po = selected.split(" (")[0]
                 else:
                     st.session_state.selected_po = None
-
-                if invoice.po_number:
-                    st.caption(f"Invoice references PO: {invoice.po_number}")
             else:
-                st.info(f"No POs indexed for vendor '{invoice.vendor_name}'")
-                st.caption("Go to 'Process POs' to add Purchase Orders")
+                st.markdown(f"""
+                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px;">
+                    <div style="color: #F59E0B; font-size: 0.8rem;">No POs found for this vendor</div>
+                    <div style="color: #94A3B8; font-size: 0.75rem;">Two-way matching will be used</div>
+                </div>
+                """, unsafe_allow_html=True)
                 st.session_state.selected_po = None
 
-        elif st.session_state.invoice_parsed:
-            st.info("Click 'Extract Invoice Data' to process with AI")
-
-st.markdown("---")
-
-# Matched Clauses Section
-st.subheader("Matched Contract Clauses")
-
-if st.session_state.invoice_extracted:
-    vendor_name = st.session_state.invoice_extracted.vendor_name
-
-    # Manual search
-    col_search, col_btn = st.columns([3, 1])
-    with col_search:
-        search_query = st.text_input(
-            "Search Query",
-            value="payment terms rates",
-            key="clause_search",
-            placeholder="e.g., payment terms, hourly rate"
-        )
-    with col_btn:
-        if st.button("Search Clauses", key="search_clauses_btn"):
-            with st.spinner("Searching..."):
-                clauses = vector_store.retrieve_clauses(
-                    vendor_name=vendor_name,
-                    query=search_query,
-                    top_k=5
-                )
-                st.session_state.matched_clauses = clauses
-
-    # Display matched clauses
-    if st.session_state.matched_clauses:
-        st.success(f"Found {len(st.session_state.matched_clauses)} matching clauses for '{vendor_name}'")
-
-        for i, clause in enumerate(st.session_state.matched_clauses):
-            with st.expander(f"Clause {i+1} (Score: {clause.similarity_score:.2f})"):
-                st.markdown(clause.text)
-                st.caption(f"Contract Type: {clause.metadata.get('contract_type', 'N/A')}")
-    else:
-        # Check if vendor exists
-        vendors = vector_store.list_vendors()
-        vendor_names = [v["vendor_name"] for v in vendors]
-
-        if vendor_name and vendor_name in vendor_names:
-            st.info(f"No clauses found matching your query for '{vendor_name}'")
-        elif vendor_name:
-            st.warning(f"No contract indexed for vendor '{vendor_name}'")
-            if vendors:
-                st.info(f"Available vendors: {', '.join(vendor_names)}")
         else:
-            st.info("Extract invoice data to find matching contract clauses")
-else:
-    st.info("Upload and extract an invoice to see matching contract clauses")
+            # Empty state
+            st.markdown("""
+            <div style="background: #1E293B; border: 1px dashed #334155; border-radius: 8px; padding: 40px; text-align: center;">
+                <div style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;">📋</div>
+                <div style="color: #64748B; font-size: 0.875rem;">Extract invoice data to see details here</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# Three-Way Matching Section
-st.subheader("Three-Way Match Validation")
+# ===== VALIDATION SECTION =====
+st.markdown("""
+<div style="font-size: 1.125rem; font-weight: 600; color: #F8FAFC; margin: 8px 0 16px 0; display: flex; align-items: center; gap: 8px;">
+    <span>Three-Way Validation</span>
+</div>
+""", unsafe_allow_html=True)
 
 if st.session_state.invoice_extracted:
     invoice = st.session_state.invoice_extracted
 
-    # Show matching mode info
-    if st.session_state.selected_po:
-        st.info(f"Three-way matching: Invoice ↔ PO ({st.session_state.selected_po}) ↔ Contract")
-    else:
-        st.info("Two-way matching: Invoice ↔ Contract (No PO selected)")
+    # Validation controls
+    col_btn, col_info = st.columns([1, 2])
 
-    col_validate, col_clear = st.columns([3, 1])
-
-    with col_validate:
-        if st.button("Validate Invoice", type="primary", key="validate_btn"):
+    with col_btn:
+        if st.button("🔍 Validate Invoice", type="primary", key="validate_btn", use_container_width=True):
             with st.spinner("Running three-way validation..."):
                 result = matcher.validate_invoice_three_way(
                     invoice=invoice,
@@ -316,214 +423,219 @@ if st.session_state.invoice_extracted:
                 )
                 st.session_state.three_way_result = result
                 st.session_state.matched_clauses = result.matched_clauses
+                st.rerun()
 
-    with col_clear:
-        if st.button("Clear Session", key="clear_btn"):
-            st.session_state.invoice_parsed = None
-            st.session_state.invoice_extracted = None
-            st.session_state.matched_clauses = []
-            st.session_state.validation_result = None
-            st.session_state.three_way_result = None
-            st.session_state.selected_po = None
-            st.rerun()
+    with col_info:
+        if st.session_state.selected_po:
+            st.markdown(f"""
+            <div style="background: rgba(14, 165, 233, 0.1); border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 8px;">
+                <span style="color: #0EA5E9;">📦</span>
+                <span style="color: #94A3B8; font-size: 0.85rem;">Three-way: Invoice ↔ <strong style="color: #F8FAFC;">{st.session_state.selected_po}</strong> ↔ Contract</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background: rgba(100, 116, 139, 0.1); border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 8px;">
+                <span style="color: #64748B;">📋</span>
+                <span style="color: #94A3B8; font-size: 0.85rem;">Two-way: Invoice ↔ Contract (no PO selected)</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Display three-way match result
+    # ===== VALIDATION RESULTS =====
     if st.session_state.three_way_result:
         result = st.session_state.three_way_result
 
         st.markdown("---")
 
-        # Status and summary row
-        col_status, col_score, col_matches = st.columns(3)
+        # Hero Result Section
+        if result.status == "PASS":
+            status_color = "#22C55E"
+            status_bg = "rgba(34, 197, 94, 0.1)"
+            status_icon = "✅"
+            status_text = "Approved"
+        elif result.status == "FAIL":
+            status_color = "#EF4444"
+            status_bg = "rgba(239, 68, 68, 0.1)"
+            status_icon = "❌"
+            status_text = "Failed"
+        else:
+            status_color = "#F59E0B"
+            status_bg = "rgba(245, 158, 11, 0.1)"
+            status_icon = "⚠️"
+            status_text = "Review Required"
 
-        with col_status:
-            st.markdown("### Overall Status")
-            if result.status == "PASS":
-                st.success(f"✅ {result.status}")
-            elif result.status == "FAIL":
-                st.error(f"❌ {result.status}")
-            else:
-                st.warning(f"⚠️ {result.status}")
+        st.markdown(f"""
+        <div style="background: {status_bg}; border: 1px solid {status_color}33; border-radius: 16px; padding: 32px; text-align: center; margin: 16px 0;">
+            <div style="font-size: 48px; margin-bottom: 8px;">{status_icon}</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: {status_color}; margin-bottom: 8px;">{status_text}</div>
+            <div style="color: #94A3B8; font-size: 1rem;">
+                {result.matches_passed}/{result.total_matches} matches passed · {result.overall_score:.0%} confidence
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        with col_score:
-            st.markdown("### Confidence")
-            st.metric("Score", f"{result.overall_score:.0%}")
+        # Match Cards
+        st.markdown("""
+        <div style="color: #94A3B8; font-size: 0.85rem; font-weight: 500; margin: 24px 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+            Match Details
+        </div>
+        """, unsafe_allow_html=True)
 
-        with col_matches:
-            st.markdown("### Matches")
-            st.metric("Passed", f"{result.matches_passed} / {result.total_matches}")
-
-        # Three-Way Match Summary
-        st.markdown("---")
-        st.markdown("### Match Summary")
-
-        match_col1, match_col2, match_col3 = st.columns(3)
+        match_cols = st.columns(3)
 
         # Match 1: Invoice ↔ PO
-        with match_col1:
-            st.markdown("**Match 1: Invoice ↔ PO**")
+        with match_cols[0]:
             if result.invoice_po_match:
-                match = result.invoice_po_match
-                if match.passed:
-                    st.success(f"✅ PASS ({match.score:.0%})")
+                m = result.invoice_po_match
+                if m.passed:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(34, 197, 94, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ PO</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #22C55E; margin-bottom: 4px;">✓ PASS</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.error(f"❌ FAIL ({match.score:.0%})")
-                if match.issues:
-                    st.caption(f"{len(match.issues)} issue(s)")
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ PO</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #EF4444; margin-bottom: 4px;">✗ FAIL</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("N/A - No PO linked")
+                st.markdown("""
+                <div style="background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center;">
+                    <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ PO</div>
+                    <div style="font-size: 1.25rem; font-weight: 600; color: #64748B; margin-bottom: 4px;">N/A</div>
+                    <div style="color: #475569; font-size: 0.8rem;">No PO linked</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         # Match 2: Invoice ↔ Contract
-        with match_col2:
-            st.markdown("**Match 2: Invoice ↔ Contract**")
+        with match_cols[1]:
             if result.invoice_contract_match:
-                match = result.invoice_contract_match
-                if match.passed:
-                    st.success(f"✅ PASS ({match.score:.0%})")
+                m = result.invoice_contract_match
+                if m.passed:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(34, 197, 94, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ Contract</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #22C55E; margin-bottom: 4px;">✓ PASS</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.error(f"❌ FAIL ({match.score:.0%})")
-                if match.issues:
-                    st.caption(f"{len(match.issues)} issue(s)")
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ Contract</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #EF4444; margin-bottom: 4px;">✗ FAIL</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.warning("No contract found")
+                st.markdown("""
+                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                    <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Invoice ↔ Contract</div>
+                    <div style="font-size: 1.25rem; font-weight: 600; color: #F59E0B; margin-bottom: 4px;">Missing</div>
+                    <div style="color: #475569; font-size: 0.8rem;">No contract found</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         # Match 3: PO ↔ Contract
-        with match_col3:
-            st.markdown("**Match 3: PO ↔ Contract**")
+        with match_cols[2]:
             if result.po_contract_match:
-                match = result.po_contract_match
-                if match.passed:
-                    st.success(f"✅ PASS ({match.score:.0%})")
+                m = result.po_contract_match
+                if m.passed:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(34, 197, 94, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">PO ↔ Contract</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #22C55E; margin-bottom: 4px;">✓ PASS</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.error(f"❌ FAIL ({match.score:.0%})")
-                if match.issues:
-                    st.caption(f"{len(match.issues)} issue(s)")
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, #1E293B 100%); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
+                        <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">PO ↔ Contract</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #EF4444; margin-bottom: 4px;">✗ FAIL</div>
+                        <div style="color: #64748B; font-size: 0.85rem;">{m.score:.0%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("N/A - No PO linked")
+                st.markdown("""
+                <div style="background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center;">
+                    <div style="color: #64748B; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">PO ↔ Contract</div>
+                    <div style="font-size: 1.25rem; font-weight: 600; color: #64748B; margin-bottom: 4px;">N/A</div>
+                    <div style="color: #475569; font-size: 0.8rem;">No PO linked</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        # Detailed issues by match type
+        # Issues Section
         if result.all_issues:
             st.markdown("---")
-            st.markdown("### All Validation Issues")
 
-            # Group issues by match type
-            for issue in result.all_issues:
-                match_label = {
-                    "invoice_po": "Invoice↔PO",
-                    "invoice_contract": "Invoice↔Contract",
-                    "po_contract": "PO↔Contract"
-                }.get(issue.match_type, "General")
+            # Count issues by severity
+            critical_count = sum(1 for i in result.all_issues if i.severity == "critical")
+            error_count = sum(1 for i in result.all_issues if i.severity == "error")
+            warning_count = sum(1 for i in result.all_issues if i.severity == "warning")
+            info_count = sum(1 for i in result.all_issues if i.severity == "info")
 
-                if issue.severity == "critical":
-                    st.error(f"[{match_label}] **{issue.rule}**: {issue.message}")
-                elif issue.severity == "error":
-                    st.warning(f"[{match_label}] **{issue.rule}**: {issue.message}")
-                elif issue.severity == "warning":
-                    st.info(f"[{match_label}] **{issue.rule}**: {issue.message}")
-                else:
-                    st.caption(f"[{match_label}] **{issue.rule}**: {issue.message}")
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <span style="color: #94A3B8; font-size: 0.85rem; font-weight: 500;">Issues Found:</span>
+                {f'<span style="background: rgba(239, 68, 68, 0.2); color: #EF4444; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{critical_count} Critical</span>' if critical_count else ''}
+                {f'<span style="background: rgba(249, 115, 22, 0.2); color: #F97316; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{error_count} Error</span>' if error_count else ''}
+                {f'<span style="background: rgba(245, 158, 11, 0.2); color: #F59E0B; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{warning_count} Warning</span>' if warning_count else ''}
+                {f'<span style="background: rgba(59, 130, 246, 0.2); color: #3B82F6; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{info_count} Info</span>' if info_count else ''}
+            </div>
+            """, unsafe_allow_html=True)
 
-                if issue.invoice_value is not None or issue.contract_value is not None:
-                    st.caption(f"  Invoice: {issue.invoice_value} | Contract/PO: {issue.contract_value}")
+            with st.expander("View all issues", expanded=critical_count > 0 or error_count > 0):
+                for issue in result.all_issues:
+                    colors = {
+                        "critical": ("#EF4444", "rgba(239, 68, 68, 0.1)"),
+                        "error": ("#F97316", "rgba(249, 115, 22, 0.1)"),
+                        "warning": ("#F59E0B", "rgba(245, 158, 11, 0.1)"),
+                        "info": ("#3B82F6", "rgba(59, 130, 246, 0.1)")
+                    }
+                    color, bg = colors.get(issue.severity, ("#64748B", "rgba(100, 116, 139, 0.1)"))
 
-        # Full report
-        with st.expander("Full Validation Report"):
-            report = matcher.generate_three_way_report(result)
-            st.code(report)
+                    st.markdown(f"""
+                    <div style="background: {bg}; border-left: 3px solid {color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 0 8px 8px 0;">
+                        <div style="color: {color}; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px;">{issue.severity.upper()}: {issue.rule}</div>
+                        <div style="color: #94A3B8; font-size: 0.85rem;">{issue.message}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-        # Download report
-        report_text = matcher.generate_three_way_report(result)
-        st.download_button(
-            label="Download Report",
-            data=report_text,
-            file_name=f"three_way_report_{result.invoice_number}.txt",
-            mime="text/plain"
-        )
+        # Download & Actions
+        st.markdown("---")
+        col_dl, col_clear = st.columns([1, 1])
 
-    else:
-        st.info("Click 'Validate Invoice' to run three-way matching")
+        with col_dl:
+            report_text = matcher.generate_three_way_report(result)
+            st.download_button(
+                label="📥 Download Report",
+                data=report_text,
+                file_name=f"validation_report_{result.invoice_number}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+        with col_clear:
+            if st.button("🔄 Start New", key="clear_btn", use_container_width=True):
+                st.session_state.invoice_parsed = None
+                st.session_state.invoice_extracted = None
+                st.session_state.matched_clauses = []
+                st.session_state.validation_result = None
+                st.session_state.three_way_result = None
+                st.session_state.selected_po = None
+                st.rerun()
 
 else:
-    st.info("Extract invoice data to enable validation")
-
-# Sidebar
-with st.sidebar:
-    st.markdown("### System Status")
-
-    # Parser status
-    if parser._docling_available:
-        st.success("Parser: Docling")
-    else:
-        st.warning("Parser: pdfplumber")
-
-    # Ollama status
-    if ollama_ok:
-        st.success(f"LLM: {settings.default_model}")
-    else:
-        st.error("LLM: Offline")
-        st.caption(ollama_msg)
-
-    # Vector store status
-    try:
-        stats = vector_store.get_stats()
-        st.success(f"Contracts: {stats['total_vendors']} vendors")
-        st.caption(f"{stats['total_chunks']} chunks indexed")
-    except Exception:
-        st.warning("Vector Store: Error")
-
-    # PO store status
-    try:
-        po_stats = po_store.get_stats()
-        st.success(f"POs: {po_stats['total_pos']} indexed")
-        st.caption(f"From {po_stats['total_vendors']} vendors")
-    except Exception:
-        st.warning("PO Store: Error")
-
-    st.markdown("---")
-
-    st.markdown("### Three-Way Match Rules")
+    # Empty state for validation
     st.markdown("""
-    **Match 1: Invoice ↔ PO**
-    - PO number reference
-    - Line item quantities match
-    - Line item prices match
-    - Total amounts match
-
-    **Match 2: Invoice ↔ Contract**
-    - Rates within contract limits
-    - Date within contract period
-    - Contract exists for vendor
-
-    **Match 3: PO ↔ Contract**
-    - PO rates within limits
-    - PO date within contract period
-
-    **Result:** ≥2 matches pass → PASS
-    """)
-
-    st.markdown("---")
-
-    st.markdown("### Indexed Vendors")
-    try:
-        vendors = vector_store.list_vendors()
-        if vendors:
-            for v in vendors:
-                st.caption(f"- {v['vendor_name']} ({v['chunk_count']} chunks)")
-        else:
-            st.caption("No vendors indexed")
-            st.info("Go to Contract Ingestion to add contracts")
-    except Exception:
-        st.caption("Could not load vendors")
-
-    st.markdown("---")
-
-    # Quick stats
-    if st.session_state.three_way_result:
-        result = st.session_state.three_way_result
-        st.markdown("### Current Invoice")
-        st.caption(f"Vendor: {result.vendor_name}")
-        st.caption(f"Invoice: {result.invoice_number}")
-        if result.po_number:
-            st.caption(f"PO: {result.po_number}")
-        st.caption(f"Status: {result.status}")
-        st.caption(f"Matches: {result.matches_passed}/{result.total_matches}")
+    <div style="background: #1E293B; border: 1px dashed #334155; border-radius: 12px; padding: 48px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 12px; opacity: 0.5;">🔍</div>
+        <div style="color: #94A3B8; font-size: 0.9rem;">Upload and extract an invoice to enable validation</div>
+    </div>
+    """, unsafe_allow_html=True)

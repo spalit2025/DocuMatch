@@ -17,6 +17,24 @@ from chromadb.config import Settings as ChromaSettings
 
 from .models import RetrievedClause
 
+
+def normalize_vendor_name(name: str) -> str:
+    """
+    Normalize vendor name for consistent matching.
+
+    Handles common variations:
+    - Trailing punctuation (Inc. vs Inc)
+    - Extra whitespace
+    - Case differences
+    """
+    if not name:
+        return ""
+    # Strip whitespace and trailing punctuation
+    normalized = name.strip().rstrip('.,;:')
+    # Normalize internal whitespace
+    normalized = ' '.join(normalized.split())
+    return normalized
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -218,7 +236,7 @@ class VectorStore:
         metadatas = []
 
         base_metadata = {
-            "vendor_name": vendor_name.strip(),
+            "vendor_name": normalize_vendor_name(vendor_name),
             "contract_id": contract_id,
             "contract_type": contract_type,
             "indexed_at": datetime.now().isoformat(),
@@ -267,8 +285,8 @@ class VectorStore:
         if not query or not query.strip():
             return []
 
-        # Build filter for vendor
-        where_filter = {"vendor_name": vendor_name.strip()} if vendor_name else None
+        # Build filter for vendor (normalize for consistent matching)
+        where_filter = {"vendor_name": normalize_vendor_name(vendor_name)} if vendor_name else None
 
         try:
             results = self._collection.query(
@@ -336,7 +354,7 @@ class VectorStore:
         if contract_id:
             where_filter = {"contract_id": contract_id}
         else:
-            where_filter = {"vendor_name": vendor_name.strip()}
+            where_filter = {"vendor_name": normalize_vendor_name(vendor_name)}
 
         # Get count before deletion
         existing = self._collection.get(where=where_filter)

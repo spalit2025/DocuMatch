@@ -15,6 +15,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 
 from .models import PurchaseOrderSchema, LineItem
+from .vector_store import normalize_vendor_name
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ class POStore:
         """Convert PO to metadata dict for storage."""
         return {
             "po_number": po.po_number,
-            "vendor_name": po.vendor_name,
+            "vendor_name": normalize_vendor_name(po.vendor_name),
             "order_date": po.order_date,
             "expected_delivery_date": po.expected_delivery_date or "",
             "total_amount": po.total_amount,
@@ -219,7 +220,7 @@ class POStore:
 
         try:
             results = self._collection.get(
-                where={"vendor_name": vendor_name.strip()}
+                where={"vendor_name": normalize_vendor_name(vendor_name)}
             )
 
             if results and results["metadatas"]:
@@ -250,7 +251,7 @@ class POStore:
         if not query:
             return []
 
-        where_filter = {"vendor_name": vendor_name.strip()} if vendor_name else None
+        where_filter = {"vendor_name": normalize_vendor_name(vendor_name)} if vendor_name else None
 
         try:
             results = self._collection.query(
@@ -311,15 +312,16 @@ class POStore:
             return 0
 
         try:
+            normalized_name = normalize_vendor_name(vendor_name)
             existing = self._collection.get(
-                where={"vendor_name": vendor_name.strip()}
+                where={"vendor_name": normalized_name}
             )
 
             count = len(existing["ids"]) if existing and existing["ids"] else 0
 
             if count > 0:
                 self._collection.delete(
-                    where={"vendor_name": vendor_name.strip()}
+                    where={"vendor_name": normalized_name}
                 )
                 logger.info(f"Deleted {count} POs for vendor '{vendor_name}'")
 
