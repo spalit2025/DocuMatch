@@ -12,24 +12,6 @@ from typing import List, Optional, Tuple
 
 import requests
 
-
-def normalize_vendor_name(name: str) -> str:
-    """
-    Normalize vendor name for matching.
-
-    Handles common variations:
-    - Trailing punctuation (Inc. vs Inc)
-    - Extra whitespace
-    - Case differences
-    """
-    if not name:
-        return ""
-    # Strip whitespace and trailing punctuation
-    normalized = name.strip().rstrip('.,;:')
-    # Normalize internal whitespace
-    normalized = ' '.join(normalized.split())
-    return normalized
-
 from .models import (
     InvoiceSchema,
     MatchResult,
@@ -39,7 +21,7 @@ from .models import (
     MatchDetail,
     ThreeWayMatchResult,
 )
-from .vector_store import VectorStore
+from .vector_store import VectorStore, normalize_vendor_name
 from .po_store import POStore
 
 # Configure logging

@@ -255,6 +255,6 @@ st.markdown("""
 # Footer
 st.markdown("""
 <div style="text-align: center; padding: 24px 0; color: #64748B; font-size: 0.75rem;">
-    Purchasing Document Matcher v1.0 · Built with Streamlit, ChromaDB & Ollama
+    Purchasing Document Matcher v2.0.0 · Built with Streamlit, ChromaDB & Ollama
 </div>
 """, unsafe_allow_html=True)
