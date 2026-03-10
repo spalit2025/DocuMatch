@@ -1,214 +1,135 @@
-# DocuMatch Architect
+# DocuMatch                                                                                          
+                                                                                                       
+  Procurement teams spend hours manually matching invoices to purchase orders                          
+  and contracts -- cross-referencing line items, validating amounts, and flagging                      
+  discrepancies across PDFs that were never designed to talk to each other.                            
+                                                                                                       
+  DocuMatch automates three-way invoice matching (Invoice <> PO <> Contract)                           
+  using local LLMs and vector search. Upload your documents, and the system                            
+  extracts structured data, matches entities semantically, and validates
+  amounts with configurable tolerance rules. Everything runs offline -- no
+  data leaves your machine.
 
-A privacy-first document processing system that runs 100% offline. It ingests complex PDFs (Invoices, Contracts, Purchase Orders), understands their layout, extracts structured data, and performs **three-way matching** to validate invoices against contracts and POs.
+  ## Why I built this
 
-## Features
+  Enterprise procurement matching is a perfect AI automation target:
+  high-volume, rule-heavy, error-prone, and currently done manually in
+  spreadsheets. I wanted to explore:
 
-- **100% Offline**: No cloud APIs, all processing happens locally
-- **Smart Parsing**: Uses Docling for intelligent PDF-to-Markdown conversion
-- **AI-Powered Extraction**: Local LLM (Phi-3.5/Llama3.2) extracts structured data from invoices and POs
-- **Semantic Search**: ChromaDB stores and retrieves contract clauses
-- **Three-Way Matching**: Validates Invoice ↔ PO ↔ Contract with configurable tolerance
-- **Validation Engine**: Compares rates, dates, quantities, and terms
+  1. **Can local LLMs handle structured extraction from messy PDFs?** Using
+     Ollama with phi3.5/llama3.2 for entity extraction from real procurement
+     documents -- no API costs, no data privacy concerns.
+  2. **Does semantic search beat keyword matching for document reconciliation?**
+     Vendor names appear differently across contracts, POs, and invoices.
+     Vector similarity (ChromaDB + FastEmbed) handles this naturally.
+  3. **What does a privacy-first AI workflow look like?** 100% offline
+     processing -- critical for finance teams handling sensitive vendor
+     agreements and pricing data.
 
-## Requirements
+  ## Demo
 
-- Python 3.10+
-- [Ollama](https://ollama.com/) with phi3.5 or llama3.2 model
-- 8GB+ RAM (16GB recommended)
+  <!-- TODO: Add screenshot of the Streamlit dashboard showing three-way match results -->
 
-## Quick Start
+   ## How it works
+                                                                                                       
+  ```                                                       
+  Upload PDFs
+      |
+  Parser Engine (Docling + pdfplumber)
+      |
+      ├── Contracts → LLM extracts entities → ChromaDB (vector store)
+      ├── Purchase Orders → LLM extracts line items → PO Store
+      └── Invoices → LLM extracts line items → Three-Way Matcher
+                                                      |
+                                                ┌─────┴─────┐
+                                                |           |
+                                          Match to PO  Match to Contract
+                                                |           |
+                                                └─────┬─────┘
+                                                      |
+                                              Validation Report
+                                          (amounts, quantities, terms)
+  ```
 
-### 1. Clone and Setup
+  **Three-way matching rules:**
+  - Invoice line items matched to PO line items by description similarity
+  - PO matched to contract by vendor name (semantic) + amount tolerance
+  - Amount validation: configurable tolerance (default 1%)
+  - Flags: overcharges, missing PO references, unmatched line items
 
-```bash
-cd documatch-architect
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+  ## Quick start
 
-### 2. Configure Environment
+  ```bash
+  # Prerequisites: Python 3.10+, Ollama running locally
+  ollama pull phi3.5
 
-```bash
-cp .env.example .env
-# Edit .env if needed (defaults work for most setups)
-```
+  # Clone and install
+  git clone https://github.com/spalit2025/DocuMatch.git
+  cd DocuMatch
+  pip install -r requirements.txt
 
-### 3. Start Ollama
+  # Configure (defaults work out of the box)
+  cp .env.example .env
 
-```bash
-# In a separate terminal
-ollama serve
+  # Launch
+  streamlit run app/main.py
+  ```
 
-# Pull the model (first time only)
-ollama pull phi3.5
-```
+  **Workflow:**
+  1. **Upload Contracts** -- ingest vendor contracts, LLM extracts key terms
+  2. **Add POs** -- process purchase orders, match to existing contracts
+  3. **Process Invoices** -- validate invoices against POs and contracts
 
-### 4. Run the Application
+  ## Architecture
 
-```bash
-streamlit run app/main.py
-```
+  - `app/main.py` -- Streamlit dashboard with three workflow pages
+  - `core/parser_engine.py` -- PDF to structured markdown (Docling + pdfplumber fallback)
+  - `core/extraction.py` -- LLM-powered entity extraction from parsed documents
+  - `core/vector_store.py` -- ChromaDB contract storage with semantic search
+  - `core/po_store.py` -- Purchase order storage and retrieval
+  - `core/matcher.py` -- Three-way validation logic with configurable rules
+  - `core/models.py` -- Pydantic schemas for contracts, POs, invoices
+  - `config.py` -- Pydantic settings with environment variable overrides
 
-Open http://localhost:8501 in your browser.
+  ## Key design decisions
 
-## Project Structure
+  - **Local LLMs over API calls:** Finance documents contain sensitive pricing and vendor data. Running
+   Ollama locally means zero data exposure -- a hard requirement for any real procurement team. Also
+  eliminates per-document API costs.
 
-```
-/documatch-architect
-├── /app
-│   ├── main.py                    # Streamlit entry point
-│   ├── /pages
-│   │   ├── 1_Ingest_Contracts.py  # Contract ingestion
-│   │   ├── 2_Process_POs.py       # PO processing
-│   │   └── 3_Process_Invoices.py  # Invoice validation
-│   └── /components                # Reusable UI widgets
-├── /core
-│   ├── parser_engine.py           # PDF to Markdown conversion
-│   ├── vector_store.py            # ChromaDB contract storage
-│   ├── po_store.py                # ChromaDB PO storage
-│   ├── extraction.py              # LLM data extraction (Invoice & PO)
-│   ├── matcher.py                 # Three-way validation logic
-│   └── models.py                  # Pydantic schemas
-├── /data
-│   ├── /contracts                 # Uploaded contract PDFs
-│   ├── /invoices                  # Uploaded invoice PDFs
-│   ├── /purchase_orders           # Uploaded PO PDFs
-│   └── /chroma_db                 # Vector database storage
-├── /tests                         # Test suite
-├── config.py                      # Configuration management
-├── requirements.txt               # Python dependencies
-└── .env.example                   # Environment template
-```
+  - **Semantic matching over exact string matching:** Vendor names appear as "Acme Corp", "ACME
+  Corporation", and "Acme" across different documents. Vector similarity handles this without brittle
+  normalization rules.
 
-## Usage
+  - **Dual parser with fallback:** Docling handles most PDFs well, but some scanned or poorly-formatted
+   documents need pdfplumber as a fallback. The system tries both rather than failing.
 
-### Ingesting Contracts
+  - **Configurable tolerance:** A 1% default tolerance for amount matching catches real discrepancies
+  while ignoring rounding differences. Adjustable per-deployment via environment variables.
 
-1. Navigate to "Ingest Contracts" page
-2. Upload a contract PDF (MSA, SOW, etc.)
-3. Enter the vendor name
-4. Click "Index Contract"
+  ## Tech stack
 
-The system will:
-- Parse the PDF to Markdown
-- Chunk the text into semantic segments
-- Store embeddings in ChromaDB
+  - **UI:** Streamlit
+  - **LLM:** Ollama (phi3.5 / llama3.2)
+  - **Vector DB:** ChromaDB with FastEmbed (all-MiniLM-L6-v2)
+  - **PDF parsing:** Docling + pdfplumber fallback
+  - **Validation:** Pydantic v2
+  - **Python:** 3.10+
 
-### Processing Purchase Orders
+  ## Configuration
 
-1. Navigate to "Process POs" page
-2. Upload a PO PDF
-3. Select the vendor (must have contract indexed first)
-4. Click "Parse PO" then "Extract PO Data"
-5. Review extracted fields
-6. Click "Index PO"
+  All settings configurable via `.env` or environment variables:
 
-The system will:
-- Extract PO data (number, vendor, line items, amounts)
-- Store in ChromaDB for three-way matching
+  ```bash
+  OLLAMA_HOST=http://localhost:11434
+  OLLAMA_DEFAULT_MODEL=phi3.5
+  CHROMA_PERSIST_DIR=./data/chroma_db
+  MATCHING_TOLERANCE=0.01           # 1% amount tolerance
+  PARSER_MAX_FILE_SIZE=52428800     # 50MB max
+  CHUNK_SIZE=512                    # tokens per chunk
+  LOG_LEVEL=INFO
+  ```
 
-### Processing Invoices (Three-Way Matching)
+  ## License
 
-1. Navigate to "Process Invoices" page
-2. Upload an invoice PDF
-3. Click "Parse Invoice" then "Extract Invoice Data"
-4. Select a linked PO (optional, for three-way matching)
-5. Click "Validate Invoice"
-
-The system performs three-way matching:
-- **Match 1**: Invoice ↔ PO (quantities, prices, totals)
-- **Match 2**: Invoice ↔ Contract (rates, dates)
-- **Match 3**: PO ↔ Contract (rates, dates)
-
-**Result**: If ≥2 matches pass → **PASS**; otherwise → **FAIL** (Manual Review)
-
-## Three-Way Matching Rules
-
-| Match | Checks |
-|-------|--------|
-| Invoice ↔ PO | PO number, line item quantities, unit prices, totals |
-| Invoice ↔ Contract | Rates within limits, invoice date within contract period |
-| PO ↔ Contract | PO rates within limits, order date within contract period |
-
-## Configuration
-
-Key settings in `.env`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_HOST` | http://localhost:11434 | Ollama API endpoint |
-| `DEFAULT_MODEL` | phi3.5 | LLM for extraction |
-| `CHUNK_SIZE` | 512 | Text chunk size (tokens) |
-| `MAX_FILE_SIZE_MB` | 50 | Maximum upload size |
-| `MATCH_TOLERANCE` | 0.01 | Amount matching tolerance (1%) |
-| `PURCHASE_ORDERS_DIR` | ./data/purchase_orders | PO storage directory |
-
-## Tech Stack
-
-- **Frontend**: Streamlit
-- **PDF Parsing**: Docling (with pdfplumber fallback)
-- **AI/LLM**: Ollama (Phi-3.5 / Llama3.2)
-- **Vector Store**: ChromaDB
-- **Embeddings**: FastEmbed (all-MiniLM-L6-v2)
-- **Validation**: Pydantic
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test files
-python -m pytest tests/test_po_store.py -v
-python -m pytest tests/test_three_way_match.py -v
-```
-
-### Code Style
-
-```bash
-# Install dev dependencies
-pip install black flake8 mypy
-
-# Format code
-black .
-
-# Lint
-flake8 .
-
-# Type check
-mypy .
-```
-
-## Troubleshooting
-
-### Ollama not connecting
-- Ensure Ollama is running: `ollama serve`
-- Check if model is pulled: `ollama list`
-- Verify endpoint: `curl http://localhost:11434/api/tags`
-
-### PDF parsing fails
-- The system will automatically fall back to pdfplumber
-- Ensure the PDF is not password-protected
-- Check file size limits
-
-### Memory issues
-- Reduce `CHUNK_SIZE` in `.env`
-- Use a smaller model (llama3.2 instead of phi3.5)
-- Process files one at a time
-
-### Three-way matching issues
-- Ensure contract is indexed before adding POs
-- Verify vendor names match exactly across documents
-- Check `MATCH_TOLERANCE` setting for amount comparisons
-
-## License
-
-MIT
-
-## Version
-
-2.0.0
+  MIT
