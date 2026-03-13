@@ -38,13 +38,13 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Effort:** S (2 hours)
 - **Why:** Gets matcher.py from 1,135 to ~540 lines. Eliminates the biggest code smell without double-touching files.
 
-### 1.4 Prompt Template System
-- [ ] Create `prompts/` directory
-- [ ] Move invoice extraction prompt to `prompts/extract_invoice.txt`
-- [ ] Move PO extraction prompt to `prompts/extract_po.txt`
-- [ ] Move rate comparison prompt to `prompts/rate_comparison.txt`
-- [ ] Update ExtractionEngine to load templates at runtime
-- [ ] Add prompt versioning (v1, v2, etc.) for A/B testing
+### 1.4 Prompt Template System ✅ DONE
+- [x] Create `prompts/` directory
+- [x] Move invoice extraction prompts to `prompts/extract_invoice_{system,user,retry}.txt`
+- [x] Move PO extraction prompts to `prompts/extract_po_{system,user,retry}.txt`
+- [x] Move rate comparison prompt to `prompts/rate_comparison.txt`
+- [x] Update ExtractionEngine to load templates at runtime with caching
+- [ ] Add prompt versioning (v1, v2, etc.) for A/B testing (deferred to Phase 4)
 - **Effort:** S (2 hours)
 - **Why:** Prompts as first-class engineering artifacts signals AI-native product thinking.
 - **Depends on:** 1.2 (extraction DRY refactor makes this cleaner)

@@ -2,11 +2,13 @@
 Extraction Engine for DocuMatch Architect.
 
 Uses local LLM (Ollama) to extract structured data from invoice documents.
+Prompts are loaded from the prompts/ directory as first-class engineering artifacts.
 """
 
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Callable, Optional, TypeVar
 
 import requests
@@ -18,108 +20,27 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-# System prompt for invoice extraction
-EXTRACTION_SYSTEM_PROMPT = """You are a precise data extraction engine. Your task is to extract invoice information from document text and output it as valid JSON.
-
-IMPORTANT RULES:
-1. Output ONLY valid JSON - no explanations, no markdown, no additional text
-2. Extract all available information from the document
-3. If a field is not found, use null for optional fields or reasonable defaults
-4. Dates should be in YYYY-MM-DD format when possible
-5. Amounts should be numbers without currency symbols
-6. Be precise with vendor names and invoice numbers
-
-OUTPUT SCHEMA:
-{
-    "vendor_name": "string (required) - The company/vendor issuing the invoice",
-    "invoice_number": "string (required) - The unique invoice identifier",
-    "invoice_date": "string (required) - Date of invoice in YYYY-MM-DD format",
-    "due_date": "string or null - Payment due date",
-    "total_amount": "number (required) - Total invoice amount",
-    "currency": "string - Currency code (default: USD)",
-    "line_items": [
-        {
-            "description": "string - Item/service description",
-            "quantity": "number - Quantity",
-            "unit_price": "number - Price per unit",
-            "total": "number - Line item total"
-        }
-    ],
-    "payment_terms": "string or null - e.g., Net 30",
-    "billing_address": "string or null - Billing address",
-    "notes": "string or null - Additional notes"
-}"""
+# Prompt directory (relative to project root)
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
-EXTRACTION_USER_PROMPT = """Extract invoice data from the following document text. Output ONLY valid JSON matching the schema.
-
-DOCUMENT TEXT:
-{document_text}
-
-JSON OUTPUT:"""
-
-
-ERROR_RETRY_PROMPT = """Your previous response was not valid JSON. The error was: {error}
-
-Please try again. Output ONLY valid JSON matching the invoice schema, with no additional text or explanation.
-
-DOCUMENT TEXT:
-{document_text}
-
-JSON OUTPUT:"""
+def _load_prompt(filename: str) -> str:
+    """Load a prompt template from the prompts/ directory."""
+    path = _PROMPTS_DIR / filename
+    if not path.exists():
+        raise FileNotFoundError(f"Prompt template not found: {path}")
+    return path.read_text().strip()
 
 
-# System prompt for PO extraction
-PO_EXTRACTION_SYSTEM_PROMPT = """You are a precise data extraction engine. Your task is to extract Purchase Order (PO) information from document text and output it as valid JSON.
-
-IMPORTANT RULES:
-1. Output ONLY valid JSON - no explanations, no markdown, no additional text
-2. Extract all available information from the document
-3. If a field is not found, use null for optional fields or reasonable defaults
-4. Dates should be in YYYY-MM-DD format when possible
-5. Amounts should be numbers without currency symbols
-6. Be precise with vendor names and PO numbers
-
-OUTPUT SCHEMA:
-{
-    "po_number": "string (required) - The unique PO identifier",
-    "vendor_name": "string (required) - The supplier/vendor name",
-    "order_date": "string (required) - Date PO was created in YYYY-MM-DD format",
-    "expected_delivery_date": "string or null - Expected delivery date",
-    "total_amount": "number (required) - Total PO amount",
-    "currency": "string - Currency code (default: USD)",
-    "line_items": [
-        {
-            "description": "string - Item/service description",
-            "quantity": "number - Quantity ordered",
-            "unit_price": "number - Price per unit",
-            "total": "number - Line item total"
-        }
-    ],
-    "billing_address": "string or null - Billing address",
-    "shipping_address": "string or null - Shipping/delivery address",
-    "payment_terms": "string or null - e.g., Net 30",
-    "contract_reference": "string or null - Reference to contract or agreement",
-    "notes": "string or null - Additional notes"
-}"""
+# Lazy-loaded prompt cache
+_prompt_cache: dict[str, str] = {}
 
 
-PO_EXTRACTION_USER_PROMPT = """Extract Purchase Order data from the following document text. Output ONLY valid JSON matching the schema.
-
-DOCUMENT TEXT:
-{document_text}
-
-JSON OUTPUT:"""
-
-
-PO_ERROR_RETRY_PROMPT = """Your previous response was not valid JSON. The error was: {error}
-
-Please try again. Output ONLY valid JSON matching the Purchase Order schema, with no additional text or explanation.
-
-DOCUMENT TEXT:
-{document_text}
-
-JSON OUTPUT:"""
+def _get_prompt(filename: str) -> str:
+    """Get a prompt template, with caching."""
+    if filename not in _prompt_cache:
+        _prompt_cache[filename] = _load_prompt(filename)
+    return _prompt_cache[filename]
 
 
 class ExtractionEngine:
@@ -194,9 +115,9 @@ class ExtractionEngine:
         """
         return self._extract_with_retry(
             document_text=document_text,
-            system_prompt=EXTRACTION_SYSTEM_PROMPT,
-            user_prompt=EXTRACTION_USER_PROMPT,
-            retry_prompt=ERROR_RETRY_PROMPT,
+            system_prompt=_get_prompt("extract_invoice_system.txt"),
+            user_prompt=_get_prompt("extract_invoice_user.txt"),
+            retry_prompt=_get_prompt("extract_invoice_retry.txt"),
             validator_fn=self._validate_invoice,
             doc_type="invoice",
             max_retries=max_retries,
@@ -222,9 +143,9 @@ class ExtractionEngine:
         """
         return self._extract_with_retry(
             document_text=document_text,
-            system_prompt=PO_EXTRACTION_SYSTEM_PROMPT,
-            user_prompt=PO_EXTRACTION_USER_PROMPT,
-            retry_prompt=PO_ERROR_RETRY_PROMPT,
+            system_prompt=_get_prompt("extract_po_system.txt"),
+            user_prompt=_get_prompt("extract_po_user.txt"),
+            retry_prompt=_get_prompt("extract_po_retry.txt"),
             validator_fn=self._validate_po,
             doc_type="PO",
             max_retries=max_retries,
@@ -240,7 +161,9 @@ class ExtractionEngine:
             raise ExtractionError("Cannot extract from empty document")
 
         response = self._call_ollama(
-            document_text, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_USER_PROMPT
+            document_text,
+            _get_prompt("extract_invoice_system.txt"),
+            _get_prompt("extract_invoice_user.txt"),
         )
         return self._parse_json_response(response)
 

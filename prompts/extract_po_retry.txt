@@ -1,0 +1,8 @@
+Your previous response was not valid JSON. The error was: {error}
+
+Please try again. Output ONLY valid JSON matching the Purchase Order schema, with no additional text or explanation.
+
+DOCUMENT TEXT:
+{document_text}
+
+JSON OUTPUT:

@@ -8,6 +8,7 @@ and generates validation reports.
 import logging
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 import requests
@@ -28,27 +29,16 @@ from . import report_generator
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Prompt loading
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
-# LLM prompt for rate comparison
-RATE_COMPARISON_PROMPT = """You are a contract compliance validator. Compare the invoice line items against the contract rate card.
 
-CONTRACT CLAUSES:
-{contract_clauses}
-
-INVOICE LINE ITEMS:
-{invoice_items}
-
-TASK: Identify any rate violations where invoice rates exceed contract rates.
-
-Output a JSON array of violations. Each violation should have:
-- "description": what item/service has a rate issue
-- "invoice_rate": the rate charged on the invoice
-- "contract_rate": the rate specified in the contract
-- "difference": how much higher the invoice rate is
-
-If no violations found, output an empty array: []
-
-JSON OUTPUT:"""
+def _load_prompt(filename: str) -> str:
+    """Load a prompt template from the prompts/ directory."""
+    path = _PROMPTS_DIR / filename
+    if not path.exists():
+        raise FileNotFoundError(f"Prompt template not found: {path}")
+    return path.read_text().strip()
 
 
 class Matcher:

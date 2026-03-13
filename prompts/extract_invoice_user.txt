@@ -1,0 +1,6 @@
+Extract invoice data from the following document text. Output ONLY valid JSON matching the schema.
+
+DOCUMENT TEXT:
+{document_text}
+
+JSON OUTPUT:
