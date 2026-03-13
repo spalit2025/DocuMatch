@@ -24,8 +24,10 @@ from .models import (
 from .parser_engine import ParserEngine, parse_pdf
 from .vector_store import VectorStore, create_vector_store
 from .po_store import POStore, create_po_store
+from .exceptions import StoreError
 from .extraction import ExtractionEngine, ExtractionError, extract_invoice, extract_po
 from .matcher import Matcher, validate_invoice, validate_invoice_three_way
+from .report_generator import generate_report, generate_three_way_report
 
 __all__ = [
     # Models
@@ -47,6 +49,8 @@ __all__ = [
     # PO Store
     "POStore",
     "create_po_store",
+    # Exceptions
+    "StoreError",
     # Extraction
     "ExtractionEngine",
     "ExtractionError",

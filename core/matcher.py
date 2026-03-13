@@ -23,6 +23,7 @@ from .models import (
 )
 from .vector_store import VectorStore, normalize_vendor_name
 from .po_store import POStore
+from . import report_generator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -104,37 +105,9 @@ class Matcher:
         """
         vendor = vendor_name or invoice.vendor_name
         issues: List[ValidationIssue] = []
-        matched_clauses: List[RetrievedClause] = []
 
         # Step 1: Retrieve relevant contract clauses
-        rate_clauses = self.vector_store.retrieve_clauses(
-            vendor_name=vendor,
-            query="hourly rate price cost rate card pricing",
-            top_k=5
-        )
-        term_clauses = self.vector_store.retrieve_clauses(
-            vendor_name=vendor,
-            query="payment terms due date net days",
-            top_k=3
-        )
-        date_clauses = self.vector_store.retrieve_clauses(
-            vendor_name=vendor,
-            query="contract period effective date termination expiration",
-            top_k=3
-        )
-
-        matched_clauses.extend(rate_clauses)
-        matched_clauses.extend(term_clauses)
-        matched_clauses.extend(date_clauses)
-
-        # Remove duplicates by chunk_id
-        seen_ids = set()
-        unique_clauses = []
-        for clause in matched_clauses:
-            if clause.chunk_id not in seen_ids:
-                seen_ids.add(clause.chunk_id)
-                unique_clauses.append(clause)
-        matched_clauses = unique_clauses
+        matched_clauses = self._get_all_contract_clauses(vendor)
 
         # Check if we have any contract data
         if not matched_clauses:
@@ -149,9 +122,9 @@ class Matcher:
 
         # Step 2: Run validation checks
         issues.extend(self._validate_line_item_totals(invoice))
-        issues.extend(self._validate_rates(invoice, rate_clauses))
-        issues.extend(self._validate_payment_terms(invoice, term_clauses))
-        issues.extend(self._validate_dates(invoice, date_clauses))
+        issues.extend(self._validate_rates(invoice, matched_clauses))
+        issues.extend(self._validate_payment_terms(invoice, matched_clauses))
+        issues.extend(self._validate_dates(invoice, matched_clauses))
 
         return self._build_result(invoice, issues, matched_clauses)
 
@@ -501,71 +474,7 @@ class Matcher:
 
     def generate_report(self, result: MatchResult) -> str:
         """Generate a human-readable validation report."""
-        lines = []
-
-        # Header
-        lines.append("=" * 60)
-        lines.append("INVOICE VALIDATION REPORT")
-        lines.append("=" * 60)
-        lines.append("")
-
-        # Summary
-        status_emoji = {"PASS": "✅", "FAIL": "❌", "REVIEW": "⚠️"}.get(result.status, "❓")
-        lines.append(f"Status: {status_emoji} {result.status}")
-        lines.append(f"Vendor: {result.vendor_name}")
-        lines.append(f"Invoice: {result.invoice_number}")
-        lines.append(f"Confidence: {result.confidence_score:.0%}")
-        lines.append(f"Timestamp: {result.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("")
-
-        # Issue Summary
-        summary = result.issue_summary
-        lines.append("-" * 40)
-        lines.append("ISSUE SUMMARY")
-        lines.append("-" * 40)
-        lines.append(f"  Critical: {summary['critical']}")
-        lines.append(f"  Errors:   {summary['error']}")
-        lines.append(f"  Warnings: {summary['warning']}")
-        lines.append(f"  Info:     {summary['info']}")
-        lines.append("")
-
-        # Detailed Issues
-        if result.issues:
-            lines.append("-" * 40)
-            lines.append("DETAILED ISSUES")
-            lines.append("-" * 40)
-
-            for issue in result.issues:
-                severity_icon = {
-                    "critical": "🔴",
-                    "error": "🟠",
-                    "warning": "🟡",
-                    "info": "🔵"
-                }.get(issue.severity, "⚪")
-
-                lines.append(f"\n{severity_icon} [{issue.severity.upper()}] {issue.rule}")
-                lines.append(f"   {issue.message}")
-                if issue.contract_value is not None:
-                    lines.append(f"   Invoice: {issue.invoice_value} | Contract: {issue.contract_value}")
-
-        # Matched Clauses
-        if result.matched_clauses:
-            lines.append("")
-            lines.append("-" * 40)
-            lines.append("MATCHED CONTRACT CLAUSES")
-            lines.append("-" * 40)
-
-            for i, clause in enumerate(result.matched_clauses[:5]):  # Show top 5
-                lines.append(f"\n[{i+1}] Score: {clause.similarity_score:.2f}")
-                preview = clause.text[:200] + "..." if len(clause.text) > 200 else clause.text
-                lines.append(f"    {preview}")
-
-        lines.append("")
-        lines.append("=" * 60)
-        lines.append("END OF REPORT")
-        lines.append("=" * 60)
-
-        return "\n".join(lines)
+        return report_generator.generate_report(result)
 
     # ==================== THREE-WAY MATCHING ====================
 
@@ -713,7 +622,8 @@ class Matcher:
 
         # Check total amounts
         total_diff = abs(invoice.total_amount - po.total_amount)
-        tolerance = max(invoice.total_amount, po.total_amount) * self.match_tolerance
+        max_total = max(invoice.total_amount, po.total_amount)
+        tolerance = max_total * self.match_tolerance if max_total > 0 else 0.01
         if total_diff > tolerance:
             issues.append(ValidationIssue(
                 rule="total_match",
@@ -978,7 +888,8 @@ class Matcher:
 
                     # Check unit price
                     price_diff = abs(inv_item.unit_price - po_item.unit_price)
-                    tolerance = max(inv_item.unit_price, po_item.unit_price) * self.match_tolerance
+                    max_price = max(inv_item.unit_price, po_item.unit_price)
+                    tolerance = max_price * self.match_tolerance if max_price > 0 else 0.01
                     if price_diff > tolerance:
                         issues.append(ValidationIssue(
                             rule="line_price_match",
@@ -1004,91 +915,7 @@ class Matcher:
 
     def generate_three_way_report(self, result: ThreeWayMatchResult) -> str:
         """Generate a human-readable three-way validation report."""
-        lines = []
-
-        # Header
-        lines.append("=" * 70)
-        lines.append("THREE-WAY INVOICE VALIDATION REPORT")
-        lines.append("=" * 70)
-        lines.append("")
-
-        # Summary
-        status_emoji = {"PASS": "✅", "FAIL": "❌", "REVIEW": "⚠️"}.get(result.status, "❓")
-        lines.append(f"Status: {status_emoji} {result.status}")
-        lines.append(f"Vendor: {result.vendor_name}")
-        lines.append(f"Invoice: {result.invoice_number}")
-        lines.append(f"PO: {result.po_number or 'N/A'}")
-        lines.append(f"Overall Score: {result.overall_score:.0%}")
-        lines.append(f"Matches Passed: {result.matches_passed}/{result.total_matches}")
-        lines.append(f"Timestamp: {result.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("")
-
-        # Three-Way Match Summary
-        lines.append("-" * 50)
-        lines.append("THREE-WAY MATCH SUMMARY")
-        lines.append("-" * 50)
-
-        def match_status(m):
-            if m is None:
-                return "⚪ N/A"
-            return f"{'✅' if m.passed else '❌'} {'PASS' if m.passed else 'FAIL'} ({m.score:.0%})"
-
-        lines.append(f"  Match 1 (Invoice ↔ PO):       {match_status(result.invoice_po_match)}")
-        lines.append(f"  Match 2 (Invoice ↔ Contract): {match_status(result.invoice_contract_match)}")
-        lines.append(f"  Match 3 (PO ↔ Contract):      {match_status(result.po_contract_match)}")
-        lines.append("")
-
-        # Result explanation
-        if result.status == "PASS":
-            lines.append(f"  ✅ RESULT: {result.matches_passed} of {result.total_matches} matches passed → APPROVED")
-        else:
-            lines.append(f"  ❌ RESULT: Only {result.matches_passed} of {result.total_matches} matches passed → MANUAL REVIEW REQUIRED")
-        lines.append("")
-
-        # Issue Summary
-        summary = result.issue_summary
-        lines.append("-" * 50)
-        lines.append("ISSUE SUMMARY")
-        lines.append("-" * 50)
-        lines.append(f"  Critical: {summary['critical']}")
-        lines.append(f"  Errors:   {summary['error']}")
-        lines.append(f"  Warnings: {summary['warning']}")
-        lines.append(f"  Info:     {summary['info']}")
-        lines.append("")
-
-        # Detailed Issues by Match
-        if result.all_issues:
-            lines.append("-" * 50)
-            lines.append("DETAILED ISSUES BY MATCH")
-            lines.append("-" * 50)
-
-            # Group issues by match type
-            match_types = {
-                "invoice_po": "Match 1 (Invoice ↔ PO)",
-                "invoice_contract": "Match 2 (Invoice ↔ Contract)",
-                "po_contract": "Match 3 (PO ↔ Contract)",
-            }
-
-            for mt, mt_label in match_types.items():
-                mt_issues = [i for i in result.all_issues if i.match_type == mt]
-                if mt_issues:
-                    lines.append(f"\n{mt_label}:")
-                    for issue in mt_issues:
-                        severity_icon = {
-                            "critical": "🔴",
-                            "error": "🟠",
-                            "warning": "🟡",
-                            "info": "🔵"
-                        }.get(issue.severity, "⚪")
-                        lines.append(f"  {severity_icon} [{issue.severity.upper()}] {issue.rule}")
-                        lines.append(f"     {issue.message}")
-
-        lines.append("")
-        lines.append("=" * 70)
-        lines.append("END OF REPORT")
-        lines.append("=" * 70)
-
-        return "\n".join(lines)
+        return report_generator.generate_three_way_report(result)
 
 
 # Convenience functions

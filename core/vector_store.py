@@ -15,6 +15,7 @@ from datetime import datetime
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
+from .exceptions import StoreError
 from .models import RetrievedClause
 
 
@@ -92,16 +93,16 @@ class VectorStore:
     def _get_or_create_collection(self):
         """Get or create the contracts collection."""
         try:
-            # Use default embedding function (ChromaDB's built-in)
-            # For production, consider using FastEmbed explicitly
             collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
             return collection
+        except (ConnectionError, OSError) as e:
+            raise StoreError(f"ChromaDB infrastructure error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to create collection: {e}")
-            raise
+            raise StoreError(f"Failed to initialize vector store collection: {e}") from e
 
     def chunk_text(self, text: str) -> List[str]:
         """
@@ -294,6 +295,8 @@ class VectorStore:
                 n_results=top_k,
                 where=where_filter,
             )
+        except (ConnectionError, OSError) as e:
+            raise StoreError(f"ChromaDB infrastructure error during query: {e}") from e
         except Exception as e:
             logger.error(f"Query failed: {e}")
             return []

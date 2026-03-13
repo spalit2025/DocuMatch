@@ -12,6 +12,7 @@ from typing import Optional
 
 import pdfplumber
 
+from config import settings
 from .models import ParseResult
 
 # Configure logging
@@ -83,6 +84,20 @@ class ParserEngine:
                 parse_method="docling",
                 success=False,
                 error_message=f"Not a PDF file: {file_path}",
+                file_path=str(path)
+            )
+
+        # Enforce max file size to prevent MemoryError
+        file_size = path.stat().st_size
+        if file_size > settings.max_file_size_bytes:
+            size_mb = file_size / (1024 * 1024)
+            return ParseResult(
+                markdown="",
+                page_count=0,
+                tables_found=0,
+                parse_method="docling",
+                success=False,
+                error_message=f"File too large: {size_mb:.1f}MB exceeds limit of {settings.max_file_size_mb}MB",
                 file_path=str(path)
             )
 

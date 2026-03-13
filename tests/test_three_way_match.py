@@ -376,7 +376,7 @@ class TestThreeWayReportGeneration:
 
             report = matcher.generate_three_way_report(sample_result)
 
-            assert "THREE-WAY MATCH REPORT" in report
+            assert "THREE-WAY INVOICE VALIDATION REPORT" in report
             assert "Test Vendor" in report
             assert "INV-001" in report
             assert "PO-001" in report

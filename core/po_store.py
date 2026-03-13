@@ -14,6 +14,7 @@ from datetime import datetime
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
+from .exceptions import StoreError
 from .models import PurchaseOrderSchema, LineItem
 from .vector_store import normalize_vendor_name
 
@@ -200,6 +201,8 @@ class POStore:
                 metadata = results["metadatas"][0]
                 return self._metadata_to_po(metadata)
 
+        except (ConnectionError, OSError) as e:
+            raise StoreError(f"ChromaDB infrastructure error retrieving PO {po_number}: {e}") from e
         except Exception as e:
             logger.error(f"Failed to get PO {po_number}: {e}")
 
@@ -226,6 +229,8 @@ class POStore:
             if results and results["metadatas"]:
                 return [self._metadata_to_po(meta) for meta in results["metadatas"]]
 
+        except (ConnectionError, OSError) as e:
+            raise StoreError(f"ChromaDB infrastructure error for vendor {vendor_name}: {e}") from e
         except Exception as e:
             logger.error(f"Failed to get POs for vendor {vendor_name}: {e}")
 
@@ -263,6 +268,8 @@ class POStore:
             if results and results["metadatas"] and results["metadatas"][0]:
                 return [self._metadata_to_po(meta) for meta in results["metadatas"][0]]
 
+        except (ConnectionError, OSError) as e:
+            raise StoreError(f"ChromaDB infrastructure error during PO search: {e}") from e
         except Exception as e:
             logger.error(f"Search failed: {e}")
 
