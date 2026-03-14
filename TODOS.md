@@ -94,16 +94,17 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Effort:** M (4-6 hours)
 - **Why:** Structured data needs a structured store. Enables history, analytics, audit trail.
 
-### 2.4 Batch Processing Pipeline
-- [ ] `ThreadPoolExecutor` with configurable max_workers (default 3-4)
-- [ ] Job state machine per-file: PENDING -> PARSING -> EXTRACTING -> MATCHING -> COMPLETE/FAILED
-- [ ] State tracked in SQLite per-file (not in-memory)
-- [ ] Per-file error isolation: one failure doesn't kill the batch
-- [ ] Progress tracking via SQLite + GET /api/batch/{job_id}/status polling
-- [ ] ETA display based on average per-invoice processing time
-- [ ] Batch size limit (default 100 files)
-- [ ] Cancel batch endpoint
-- **Implementation:** ThreadPoolExecutor (not asyncio) because core modules use synchronous `requests` calls to Ollama. No async rewrite needed. Ollama serializes requests naturally.
+### 2.4 Batch Processing Pipeline ✅ DONE
+- [x] `ThreadPoolExecutor` with configurable max_workers (default 3)
+- [x] Job state machine per-file: PENDING -> PARSING -> EXTRACTING -> MATCHING -> COMPLETE/FAILED
+- [x] State tracked in SQLite per-file (not in-memory)
+- [x] Per-file error isolation: one failure doesn't kill the batch
+- [x] Progress tracking via SQLite + GET /api/batch/{batch_id}/status polling
+- [x] ETA display based on average per-invoice processing time
+- [x] Batch size limit (default 100 files)
+- [x] Cancel batch endpoint (POST /api/batch/{batch_id}/cancel)
+- [x] 17 batch service tests (submit, process, status, cancel, integration)
+- **Implementation:** ThreadPoolExecutor (not asyncio) because core modules use synchronous `requests` calls to Ollama. No async rewrite needed.
 - **Effort:** L (8-12 hours)
 - **Why:** Processing 50 invoices with a dashboard is the hero demo. Shows production engineering.
 - **Depends on:** 2.1, 2.2, 2.3

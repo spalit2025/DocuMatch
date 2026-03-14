@@ -24,10 +24,14 @@ Architecture:
            └──────────────────┘
 """
 
+from .batch_service import BatchFile, BatchService, BatchStatus
 from .document_service import DocumentService, DocumentProcessingError
 from .match_service import MatchService
 
 __all__ = [
+    "BatchFile",
+    "BatchService",
+    "BatchStatus",
     "DocumentService",
     "DocumentProcessingError",
     "MatchService",

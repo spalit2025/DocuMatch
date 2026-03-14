@@ -13,7 +13,7 @@ from core.extraction import ExtractionEngine
 from core.matcher import Matcher
 from core.parser_engine import ParserEngine
 from core.po_store import POStore
-from core.services import DocumentService, MatchService
+from core.services import BatchService, DocumentService, MatchService
 from core.vector_store import VectorStore
 
 
@@ -72,3 +72,12 @@ def get_match_service() -> MatchService:
 @lru_cache
 def get_database() -> Database:
     return Database(db_path=settings.db_path)
+
+
+@lru_cache
+def get_batch_service() -> BatchService:
+    return BatchService(
+        document_service=get_document_service(),
+        match_service=get_match_service(),
+        database=get_database(),
+    )

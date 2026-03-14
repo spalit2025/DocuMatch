@@ -17,10 +17,20 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from config import settings
 from core.database import Database
-from core.services import DocumentService, MatchService
+from core.services import BatchService, DocumentService, MatchService
+from core.services.batch_service import BatchFile
 
-from .dependencies import get_database, get_document_service, get_match_service
+from .dependencies import (
+    get_batch_service,
+    get_database,
+    get_document_service,
+    get_match_service,
+)
 from .schemas import (
+    BatchErrorDetail,
+    BatchStatusResponse,
+    BatchSubmitRequest,
+    BatchSubmitResponse,
     ComponentHealth,
     ContractIngestResponse,
     HealthResponse,
@@ -209,6 +219,88 @@ def process_invoice(
                 for i in result.all_issues
             ],
         ),
+    )
+
+
+# ==================== BATCH PROCESSING ====================
+
+
+@router.post(
+    "/batch/process",
+    response_model=BatchSubmitResponse,
+    summary="Submit a batch of invoices for processing",
+    description=(
+        "Submit multiple invoice files for concurrent processing. "
+        "Returns immediately with a batch ID for status polling via "
+        "GET /api/batch/{batch_id}/status. Max 100 files per batch."
+    ),
+)
+def submit_batch(
+    request: BatchSubmitRequest,
+    batch_service: BatchService = Depends(get_batch_service),
+):
+    files = [
+        BatchFile(file_path=f.file_path, po_number=f.po_number)
+        for f in request.files
+    ]
+
+    batch_id = batch_service.submit_batch(files)
+
+    return BatchSubmitResponse(
+        batch_id=batch_id,
+        total_files=len(files),
+        status="PARSING",
+    )
+
+
+@router.get(
+    "/batch/{batch_id}/status",
+    response_model=BatchStatusResponse,
+    summary="Check batch processing status",
+    description="Poll this endpoint to track progress of a submitted batch.",
+)
+def get_batch_status(
+    batch_id: int,
+    batch_service: BatchService = Depends(get_batch_service),
+):
+    status = batch_service.get_batch_status(batch_id)
+    if status is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
+
+    return BatchStatusResponse(
+        job_id=status.job_id,
+        status=status.status,
+        total_files=status.total_files,
+        completed=status.completed,
+        failed=status.failed,
+        pending=status.pending,
+        processing=status.processing,
+        eta_seconds=status.eta_seconds,
+        errors=[
+            BatchErrorDetail(file=e["file"], error=e["error"])
+            for e in status.errors
+        ],
+    )
+
+
+@router.post(
+    "/batch/{batch_id}/cancel",
+    summary="Cancel a running batch",
+    description="Signal cancellation for a running batch. Already-processing files will complete.",
+)
+def cancel_batch(
+    batch_id: int,
+    batch_service: BatchService = Depends(get_batch_service),
+):
+    cancelled = batch_service.cancel_batch(batch_id)
+    if cancelled:
+        return {"message": f"Batch {batch_id} cancellation requested"}
+
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=404,
+        detail=f"Batch {batch_id} not found or already finished",
     )
 
 

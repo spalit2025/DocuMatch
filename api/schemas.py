@@ -153,6 +153,54 @@ class StatsResponse(BaseModel):
     pass_rate: float
 
 
+# ==================== BATCH ====================
+
+
+class BatchFileRequest(BaseModel):
+    """A single file in a batch request."""
+
+    file_path: str = Field(description="Path to invoice PDF file")
+    po_number: Optional[str] = Field(None, description="PO number for three-way matching")
+
+
+class BatchSubmitRequest(BaseModel):
+    """Request to submit a batch of invoices for processing."""
+
+    files: list[BatchFileRequest] = Field(
+        ..., min_length=1, max_length=100,
+        description="List of invoice files to process (max 100)",
+    )
+
+
+class BatchSubmitResponse(BaseModel):
+    """Response after submitting a batch."""
+
+    batch_id: int
+    total_files: int
+    status: str
+
+
+class BatchErrorDetail(BaseModel):
+    """Error detail for a failed file in a batch."""
+
+    file: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BatchStatusResponse(BaseModel):
+    """Status of a batch processing job."""
+
+    job_id: int
+    status: str
+    total_files: int
+    completed: int
+    failed: int
+    pending: int
+    processing: int
+    eta_seconds: Optional[float] = None
+    errors: list[BatchErrorDetail]
+
+
 # ==================== ERRORS ====================
 
 
