@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from api.app import app
-from api.dependencies import get_document_service, get_match_service
+from api.dependencies import get_batch_service, get_database, get_document_service, get_match_service
 from core.exceptions import StoreError
 from core.extraction import ExtractionError
 from core.models import (
@@ -54,10 +54,22 @@ def mock_match_service():
 
 
 @pytest.fixture
-def client(mock_doc_service, mock_match_service):
+def mock_batch_service():
+    return MagicMock()
+
+
+@pytest.fixture
+def mock_database():
+    return MagicMock()
+
+
+@pytest.fixture
+def client(mock_doc_service, mock_match_service, mock_batch_service, mock_database):
     """TestClient with mocked dependencies."""
     app.dependency_overrides[get_document_service] = lambda: mock_doc_service
     app.dependency_overrides[get_match_service] = lambda: mock_match_service
+    app.dependency_overrides[get_batch_service] = lambda: mock_batch_service
+    app.dependency_overrides[get_database] = lambda: mock_database
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -438,3 +450,147 @@ class TestHealthCheck:
 
         assert response.status_code == 200
         assert response.json()["components"]["parser"]["detail"] == "pdfplumber"
+
+
+# ==================== BATCH PROCESSING ====================
+
+
+class TestBatchAPI:
+    """Tests for batch processing API endpoints."""
+
+    def test_submit_batch(self, client, mock_batch_service):
+        mock_batch_service.submit_batch.return_value = 42
+
+        response = client.post(
+            "/api/batch/process",
+            json={
+                "files": [
+                    {"file_path": "/tmp/inv1.pdf", "po_number": "PO-001"},
+                    {"file_path": "/tmp/inv2.pdf"},
+                ]
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["batch_id"] == 42
+        assert data["total_files"] == 2
+        assert data["status"] == "PARSING"
+
+    def test_submit_empty_batch(self, client):
+        response = client.post(
+            "/api/batch/process",
+            json={"files": []},
+        )
+        assert response.status_code == 422
+
+    def test_get_batch_status(self, client, mock_batch_service):
+        from core.services.batch_service import BatchStatus
+        mock_batch_service.get_batch_status.return_value = BatchStatus(
+            job_id=42,
+            status="PARSING",
+            total_files=3,
+            completed=1,
+            failed=0,
+            pending=1,
+            processing=1,
+            eta_seconds=30.5,
+            errors=[],
+        )
+
+        response = client.get("/api/batch/42/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job_id"] == 42
+        assert data["total_files"] == 3
+        assert data["completed"] == 1
+        assert data["eta_seconds"] == 30.5
+
+    def test_get_batch_status_not_found(self, client, mock_batch_service):
+        mock_batch_service.get_batch_status.return_value = None
+
+        response = client.get("/api/batch/999/status")
+        assert response.status_code == 404
+
+    def test_cancel_batch(self, client, mock_batch_service):
+        mock_batch_service.cancel_batch.return_value = True
+
+        response = client.post("/api/batch/42/cancel")
+
+        assert response.status_code == 200
+        assert "cancellation" in response.json()["message"]
+
+    def test_cancel_batch_not_found(self, client, mock_batch_service):
+        mock_batch_service.cancel_batch.return_value = False
+
+        response = client.post("/api/batch/999/cancel")
+        assert response.status_code == 404
+
+
+# ==================== RESULTS & STATS ====================
+
+
+class TestResultsAPI:
+    """Tests for GET /api/results and GET /api/stats."""
+
+    def test_get_results_empty(self, client, mock_database):
+        mock_database.get_results.return_value = []
+
+        response = client.get("/api/results")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_results_with_data(self, client, mock_database):
+        from datetime import datetime, timezone
+        mock_result = MagicMock()
+        mock_result.id = 1
+        mock_result.job_id = 10
+        mock_result.invoice_file = "invoice.pdf"
+        mock_result.vendor_name = "Acme"
+        mock_result.invoice_number = "INV-001"
+        mock_result.status = "PASS"
+        mock_result.confidence = 0.95
+        mock_result.matches_passed = 2
+        mock_result.total_matches = 2
+        mock_result.created_at = datetime(2024, 1, 15, tzinfo=timezone.utc)
+        mock_database.get_results.return_value = [mock_result]
+
+        response = client.get("/api/results")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["invoice_number"] == "INV-001"
+        assert data[0]["status"] == "PASS"
+
+    def test_get_results_with_filters(self, client, mock_database):
+        mock_database.get_results.return_value = []
+
+        client.get("/api/results?vendor_name=Acme&status=PASS&limit=10")
+
+        mock_database.get_results.assert_called_once_with(
+            vendor_name="Acme", status="PASS", job_id=None, limit=10,
+        )
+
+    def test_get_stats(self, client, mock_database):
+        mock_database.get_stats.return_value = {
+            "total_jobs": 10,
+            "completed_jobs": 8,
+            "failed_jobs": 1,
+            "pending_jobs": 1,
+            "total_results": 15,
+            "pass_count": 12,
+            "fail_count": 2,
+            "review_count": 1,
+            "pass_rate": 0.8,
+        }
+
+        response = client.get("/api/stats")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_jobs"] == 10
+        assert data["pass_rate"] == 0.8
+        assert data["pass_count"] == 12

@@ -151,14 +151,14 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Effort:** M (4-6 hours)
 - **Why:** `docker compose up` = instant demo. CI badge = credibility.
 
-### 3.3 4-Tier Test Suite
-- [ ] **Tier 3 (do first):** API tests - FastAPI TestClient for all 7 endpoints with mocked Ollama. Highest portfolio visibility.
-- [ ] **Tier 1:** Unit tests - fill gaps (PO extraction, three-way report generation, error paths, negative cases)
-- [ ] **Tier 2:** Integration tests - mocked Ollama, real ChromaDB
-- [ ] **Tier 4:** E2E tests - full pipeline with sample PDFs
-- [ ] Hostile tests: 0-byte PDF, huge PDF, .exe renamed to .pdf, empty text
-- [ ] CI integration via GitHub Actions
-- **Priority order:** API tests first (prove the API contract), then unit gaps, then integration, then E2E.
+### 3.3 4-Tier Test Suite ✅ DONE
+- [x] **Tier 3:** API tests - 28 tests covering all 7 endpoints (contracts, POs, invoices, batch, results, stats, health)
+- [x] **Tier 1:** Unit tests - 18 hostile input tests (0-byte PDF, binary garbage, empty strings, boundary values, negative amounts)
+- [x] **Tier 1:** Service tests - 24 DocumentService + 19 MatchService + 17 BatchService + 34 Database tests
+- [ ] **Tier 2:** Integration tests with mocked Ollama + real ChromaDB (deferred)
+- [ ] **Tier 4:** E2E tests with sample PDFs (deferred)
+- [x] CI integration via GitHub Actions (Python 3.11/3.12)
+- **Total: 238 tests passing**
 - **Effort:** L (8-12 hours)
 - **Why:** Test quality is as visible as code quality. Non-negotiable for portfolio.
 - **Depends on:** 2.2 FastAPI
