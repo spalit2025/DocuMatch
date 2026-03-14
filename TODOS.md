@@ -53,13 +53,13 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 
 ## Phase 2: Architecture (P1 - Core Features)
 
-### 2.1 Service Layer
-- [ ] Create `core/services/` package
-- [ ] `DocumentService` - orchestrates all document ingestion (contracts, POs, invoices): parse -> extract -> store
-- [ ] `MatchService` - orchestrates validation, matching, and batch processing
-- [ ] Both Streamlit and FastAPI consume the service layer
-- [ ] Extract remaining matcher validators (rate_validator, date_validator, terms_validator, line_item_validator) into `core/validators/` alongside this work
-- **Architecture:** 2 services, not 4. IngestService/ProcessService distinction is artificial — DocumentService handles all document types. Batch processing is a method on MatchService.
+### 2.1 Service Layer ✅ DONE
+- [x] Create `core/services/` package
+- [x] `DocumentService` - orchestrates all document ingestion (contracts, POs, invoices): parse -> extract -> store
+- [x] `MatchService` - orchestrates validation, matching, and batch processing
+- [x] Both Streamlit and FastAPI consume the service layer
+- [ ] Extract remaining matcher validators (rate_validator, date_validator, terms_validator, line_item_validator) into `core/validators/` (deferred to Phase 2.4)
+- **Architecture:** 2 services, not 4. Constructor injection for testability. Streamlit pages continue using core modules directly for step-by-step UX; services provide one-shot orchestration for FastAPI/batch.
 - **Effort:** M (4-6 hours)
 - **Why:** Decouples business logic from presentation. Enables API + UI from same codebase.
 

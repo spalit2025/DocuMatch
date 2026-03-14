@@ -8,6 +8,7 @@ This package contains the core modules:
 - extraction: LLM-based data extraction (Invoice and PO)
 - matcher: Invoice-Contract-PO three-way validation logic
 - models: Pydantic data models
+- services: Orchestration layer (DocumentService, MatchService)
 """
 
 from .models import (
@@ -28,6 +29,7 @@ from .exceptions import StoreError
 from .extraction import ExtractionEngine, ExtractionError, extract_invoice, extract_po
 from .matcher import Matcher, validate_invoice, validate_invoice_three_way
 from .report_generator import generate_report, generate_three_way_report
+from .services import DocumentService, DocumentProcessingError, MatchService
 
 __all__ = [
     # Models
@@ -60,4 +62,8 @@ __all__ = [
     "Matcher",
     "validate_invoice",
     "validate_invoice_three_way",
+    # Services
+    "DocumentService",
+    "DocumentProcessingError",
+    "MatchService",
 ]
