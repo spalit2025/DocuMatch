@@ -20,6 +20,7 @@ from fastapi.responses import Response
 
 from config import settings
 from core.database import Database
+from core.demo import load_demo_data
 from core.export import export_results_excel
 from core.extraction import ExtractionEngine
 from core.services import BatchService, DocumentService, MatchService
@@ -30,6 +31,9 @@ from .dependencies import (
     get_database,
     get_document_service,
     get_match_service,
+    get_matcher,
+    get_po_store,
+    get_vector_store,
 )
 from .schemas import (
     BatchErrorDetail,
@@ -383,6 +387,39 @@ def get_stats(
     db: Database = Depends(get_database),
 ):
     return StatsResponse(**db.get_stats())
+
+
+# ==================== DEMO ====================
+
+
+@router.post(
+    "/demo/load",
+    summary="Load sample data for demo",
+    description=(
+        "Load 3 curated scenarios (PASS, FAIL, FAIL) into the system. "
+        "Indexes sample contracts and POs, processes sample invoices, "
+        "and saves results to the database. No Ollama required."
+    ),
+)
+def load_demo(
+    db: Database = Depends(get_database),
+):
+    from core.matcher import Matcher as MatcherClass
+    vs = get_vector_store()
+    ps = get_po_store()
+    m = get_matcher()
+
+    summary = load_demo_data(
+        vector_store=vs, po_store=ps, matcher=m, database=db,
+    )
+
+    return {
+        "message": "Demo data loaded successfully",
+        "contracts_indexed": summary["contracts_indexed"],
+        "pos_indexed": summary["pos_indexed"],
+        "invoices_processed": summary["invoices_processed"],
+        "results": summary["results"],
+    }
 
 
 # ==================== EXPORT ====================

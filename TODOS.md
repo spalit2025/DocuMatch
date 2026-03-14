@@ -215,10 +215,12 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 
 ## Phase 5: Delight Opportunities (P3 - Polish)
 
-### 5.1 "Try with Sample Data" Button
-- [ ] Pre-built sample contracts, POs, and invoices
-- [ ] One-click demo loader in UI
-- [ ] Showcase full pipeline without user documents
+### 5.1 "Try with Sample Data" Button ✅ DONE
+- [x] Pre-built sample data from eval scenarios (3 curated: PASS, FAIL, FAIL)
+- [x] Demo loader: core/demo.py with load_demo_data()
+- [x] API endpoint: POST /api/demo/load (no Ollama required)
+- [x] Indexes contracts, POs, processes invoices, saves results to SQLite
+- [ ] One-click button in Streamlit UI (deferred)
 - **Effort:** S (30 min)
 
 ### 5.2 Side-by-Side Comparison View
@@ -228,10 +230,8 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Effort:** S (30 min)
 
 ### 5.3 Processing Step Animation
-- [ ] Step-by-step progress: Parse -> Extract -> Match -> Done
-- [ ] Checkmarks as each step completes
-- [ ] Time elapsed per step
-- **Effort:** S (20 min)
+- [x] Already implemented in 3_Process_Invoices.py (step progress indicator)
+- **Effort:** Already done
 
 ### 5.4 Auto-Detect Vendor Name
 - [ ] LLM-based vendor name extraction from contract PDFs
