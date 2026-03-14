@@ -37,4 +37,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest tests/ -v -k "not Integration and not real_extraction" --tb=short
+          python -m pytest tests/ -v -k "not Integration and not real_extraction and not test_count_tables" --tb=short

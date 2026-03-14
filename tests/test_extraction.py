@@ -235,7 +235,9 @@ class TestExtractionWithMocking:
 
     @pytest.fixture
     def engine(self):
-        return ExtractionEngine()
+        e = ExtractionEngine()
+        e._connection_verified = True  # Skip pre-flight check in unit tests
+        return e
 
     def test_successful_extraction(self, engine):
         """Test successful extraction with mocked API."""
@@ -337,7 +339,8 @@ class TestConvenienceFunction:
             "message": {"content": json.dumps(SAMPLE_EXTRACTED_JSON)}
         }
 
-        with patch("requests.post", return_value=mock_response):
+        with patch("requests.post", return_value=mock_response), \
+             patch.object(ExtractionEngine, '_verify_connection_once'):
             invoice = extract_invoice(
                 SAMPLE_INVOICE_MARKDOWN,
                 model="phi3.5"
