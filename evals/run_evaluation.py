@@ -503,41 +503,82 @@ class EvaluationRunner:
             self.cleanup()
 
 
+def metrics_to_json(metrics: EvalMetrics, results: List[EvalResult]) -> dict:
+    """Convert metrics to a JSON-serializable dict for CI/programmatic access."""
+    return {
+        "total_scenarios": metrics.total_scenarios,
+        "status_accuracy": round(metrics.status_accuracy, 4),
+        "matches_accuracy": round(metrics.matches_accuracy, 4),
+        "precision": round(metrics.precision, 4),
+        "recall": round(metrics.recall, 4),
+        "f1_score": round(metrics.f1_score, 4),
+        "confusion_matrix": {
+            "true_pass": metrics.true_pass,
+            "false_pass": metrics.false_pass,
+            "true_fail": metrics.true_fail,
+            "false_fail": metrics.false_fail,
+        },
+        "by_category": {
+            "exact_match": round(metrics.exact_match_accuracy, 4),
+            "partial_match": round(metrics.partial_match_accuracy, 4),
+            "mismatch": round(metrics.mismatch_accuracy, 4),
+        },
+        "scenarios": [
+            {
+                "id": r.scenario_id,
+                "vendor": r.vendor,
+                "expected": r.expected_status,
+                "actual": r.actual_status,
+                "correct": r.status_correct,
+            }
+            for r in results if not r.error
+        ],
+    }
+
+
 def main():
     """Main entry point."""
-    print("\n" + "=" * 70)
-    print("DOCUMATCH ARCHITECT - EVALUATION SUITE")
-    print("=" * 70)
-    print()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="DocuMatch Evaluation Suite")
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
+    parser.add_argument("--ci", action="store_true", help="CI mode: JSON output + exit code")
+    args = parser.parse_args()
 
     # First, generate synthetic data if not exists
     expected_path = EVAL_DATA_DIR / "expected_results.json"
     if not expected_path.exists():
-        print("Generating synthetic test data...")
+        if not args.json and not args.ci:
+            print("Generating synthetic test data...")
         from synthetic_data import save_all_data
         save_all_data()
-        print()
 
     # Run evaluation
     runner = EvaluationRunner(use_temp_db=True)
     results, metrics, report = runner.run()
 
-    # Print report
-    print("\n")
-    print(report)
+    # Output based on mode
+    if args.json or args.ci:
+        summary = metrics_to_json(metrics, results)
+        print(json.dumps(summary, indent=2))
+    else:
+        print("\n")
+        print(report)
 
-    # Save report
-    report_path = EVAL_DATA_DIR / f"eval_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    with open(report_path, "w") as f:
-        f.write(report)
-    print(f"\nReport saved to: {report_path}")
+        # Save report
+        report_path = EVAL_DATA_DIR / f"eval_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        with open(report_path, "w") as f:
+            f.write(report)
+        print(f"\nReport saved to: {report_path}")
 
     # Return exit code based on accuracy
     if metrics.status_accuracy >= 0.9:
-        print("\n✓ Evaluation PASSED (>= 90% accuracy)")
+        if not args.json:
+            print("\n✓ Evaluation PASSED (>= 90% accuracy)")
         return 0
     else:
-        print(f"\n✗ Evaluation NEEDS IMPROVEMENT ({metrics.status_accuracy:.1%} accuracy)")
+        if not args.json:
+            print(f"\n✗ Evaluation NEEDS IMPROVEMENT ({metrics.status_accuracy:.1%} accuracy)")
         return 1
 
 

@@ -126,6 +126,24 @@ curl "http://localhost:8000/api/results?status=FAIL&vendor_name=Acme"
 curl http://localhost:8000/api/health
 ```
 
+## Evaluation Results
+
+The matching engine is evaluated against 12 synthetic scenarios covering exact matches, partial matches, and full mismatches. Run `python evals/run_evaluation.py` to reproduce.
+
+| Metric | Score |
+|--------|-------|
+| Status Accuracy | 100% (12/12) |
+| Matches Accuracy | 91.7% (11/12) |
+| Precision (PASS) | 100% |
+| Recall (PASS) | 100% |
+| F1 Score | 100% |
+
+| Category | Scenarios | Accuracy |
+|----------|-----------|----------|
+| Exact Match | 7 | 100% |
+| Partial Match | 2 | 100% |
+| Full Mismatch | 3 | 100% |
+
 ## Key Features
 
 | Feature | Description |

@@ -185,27 +185,29 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 
 ## Phase 4: AI Engineering Depth (P2 - Differentiation)
 
-### 4.1 Eval Framework Integration
-- [ ] Connect evals/ to CI pipeline
-- [ ] Add extraction accuracy metrics (precision, recall, F1)
-- [ ] Benchmark suite with regression detection
-- [ ] Results table in README
+### 4.1 Eval Framework Integration ✅ DONE
+- [x] Connect evals/ to CI pipeline (separate `eval` job runs after tests)
+- [x] Added `--ci` and `--json` output modes to eval runner
+- [x] Existing metrics: status accuracy, matches accuracy, precision, recall, F1
+- [x] Confusion matrix and per-category breakdowns
+- [x] Results table in README (100% status accuracy, 91.7% matches accuracy)
 - **Effort:** M (4-6 hours)
 - **Why:** Measuring LLM output quality systematically is THE AI engineering differentiator.
 
-### 4.2 Multi-Model Support
-- [ ] Model selector in UI and API
-- [ ] Run eval suite per model
-- [ ] Comparison table (model vs accuracy vs speed)
-- [ ] Config-driven model selection
+### 4.2 Multi-Model Support ✅ DONE
+- [x] Model parameter on API endpoints (POST /api/pos/ingest, POST /api/invoices/process)
+- [x] Config-driven default model via settings.default_model
+- [x] Runtime model switching per-request with automatic cleanup
+- [ ] Model selector in Streamlit UI (deferred -- API-first approach)
+- [ ] Run eval suite per model with comparison table (deferred)
 - **Effort:** M (4-6 hours)
 - **Why:** "Which model works best? Here are the numbers." Shows systematic AI engineering.
 
-### 4.3 Export System
-- [ ] PDF report generation (reportlab or weasyprint)
-- [ ] Excel export for match results (openpyxl)
-- [ ] API endpoint for report download
-- [ ] Professional formatting with summary tables
+### 4.3 Export System ✅ DONE
+- [x] Excel export for match results (openpyxl) with summary + details sheets
+- [x] API endpoint: GET /api/export/excel (with vendor/status filters)
+- [x] Professional formatting with conditional status coloring
+- [ ] PDF report generation (deferred -- Excel covers the primary use case)
 - **Effort:** M (4-6 hours)
 - **Why:** For SaaS, the output artifact IS the product.
 

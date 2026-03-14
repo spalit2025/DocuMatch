@@ -11,12 +11,17 @@ Endpoints:
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
+from fastapi.responses import Response
+
 from config import settings
 from core.database import Database
+from core.export import export_results_excel
+from core.extraction import ExtractionEngine
 from core.services import BatchService, DocumentService, MatchService
 from core.services.batch_service import BatchFile
 
@@ -103,6 +108,7 @@ def ingest_contract(
 def ingest_po(
     file: UploadFile = File(..., description="Purchase Order PDF file"),
     vendor_name: str = Form(..., description="Vendor name"),
+    model: Optional[str] = Form(None, description="LLM model override (e.g., llama3.2)"),
     service: DocumentService = Depends(get_document_service),
 ):
     # Save uploaded file
@@ -111,11 +117,22 @@ def ingest_po(
     with open(save_path, "wb") as f:
         f.write(file.file.read())
 
-    # Process via service
-    po, result = service.ingest_po(
-        file_path=str(save_path),
-        vendor_name=vendor_name,
-    )
+    # Swap extraction engine if model override specified
+    original_engine = None
+    if model and model != settings.default_model:
+        original_engine = service.extraction_engine
+        service.extraction_engine = ExtractionEngine(
+            model=model, ollama_host=settings.ollama_host,
+        )
+
+    try:
+        po, result = service.ingest_po(
+            file_path=str(save_path),
+            vendor_name=vendor_name,
+        )
+    finally:
+        if original_engine:
+            service.extraction_engine = original_engine
 
     return POIngestResponse(
         po_number=po.po_number,
@@ -156,6 +173,7 @@ def ingest_po(
 def process_invoice(
     file: UploadFile = File(..., description="Invoice PDF file"),
     po_number: Optional[str] = Form(None, description="PO number for three-way matching"),
+    model: Optional[str] = Form(None, description="LLM model override (e.g., llama3.2)"),
     doc_service: DocumentService = Depends(get_document_service),
     match_service: MatchService = Depends(get_match_service),
 ):
@@ -165,8 +183,19 @@ def process_invoice(
     with open(save_path, "wb") as f:
         f.write(file.file.read())
 
-    # Extract invoice data
-    invoice, parse_result = doc_service.process_invoice(str(save_path))
+    # Swap extraction engine if model override specified
+    original_engine = None
+    if model and model != settings.default_model:
+        original_engine = doc_service.extraction_engine
+        doc_service.extraction_engine = ExtractionEngine(
+            model=model, ollama_host=settings.ollama_host,
+        )
+
+    try:
+        invoice, parse_result = doc_service.process_invoice(str(save_path))
+    finally:
+        if original_engine:
+            doc_service.extraction_engine = original_engine
 
     # Validate (three-way if PO provided, two-way otherwise)
     result = match_service.validate_three_way(invoice, po_number=po_number)
@@ -354,6 +383,31 @@ def get_stats(
     db: Database = Depends(get_database),
 ):
     return StatsResponse(**db.get_stats())
+
+
+# ==================== EXPORT ====================
+
+
+@router.get(
+    "/export/excel",
+    summary="Export results as Excel",
+    description="Download validation results as an Excel file with summary and details sheets.",
+)
+def export_excel(
+    vendor_name: Optional[str] = Query(None, description="Filter by vendor"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    db: Database = Depends(get_database),
+):
+    excel_bytes = export_results_excel(
+        database=db, vendor_name=vendor_name, status=status,
+    )
+
+    filename = f"documatch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ==================== HEALTH ====================
