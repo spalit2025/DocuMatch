@@ -63,17 +63,20 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Effort:** M (4-6 hours)
 - **Why:** Decouples business logic from presentation. Enables API + UI from same codebase.
 
-### 2.2 FastAPI Layer
-- [ ] Create `api/` package with FastAPI app
-- [ ] POST /api/contracts/ingest - upload and index contract
-- [ ] POST /api/pos/ingest - upload and index PO
-- [ ] POST /api/invoices/process - upload, extract, and match invoice
-- [ ] POST /api/batch/process - batch process multiple invoices
-- [ ] GET /api/batch/{job_id}/status - check batch job status
-- [ ] GET /api/results - query match results
-- [ ] GET /api/health - system health check
-- [ ] OpenAPI docs with examples and descriptions
+### 2.2 FastAPI Layer ✅ DONE (core endpoints)
+- [x] Create `api/` package with FastAPI app
+- [x] POST /api/contracts/ingest - upload and index contract
+- [x] POST /api/pos/ingest - upload and index PO
+- [x] POST /api/invoices/process - upload, extract, and match invoice
+- [ ] POST /api/batch/process - batch process multiple invoices (deferred to 2.4)
+- [ ] GET /api/batch/{job_id}/status - check batch job status (deferred to 2.4)
+- [ ] GET /api/results - query match results (deferred to 2.3)
+- [x] GET /api/health - system health check
+- [x] OpenAPI docs with examples and descriptions (auto-generated at /docs and /redoc)
+- [x] Exception handlers: 422 (DocumentProcessingError), 502 (ExtractionError), 503 (StoreError)
+- [x] 17 API tests with mocked services
 - **Deployment:** Runs as separate process from Streamlit (port 8000 vs 8501). Both share data directory.
+- **Run:** `uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload`
 - **Effort:** L (8-12 hours)
 - **Why:** The single biggest credibility gap. Every serious AI product has an API.
 - **Depends on:** 2.1 Service Layer
