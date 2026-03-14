@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  # Streamlit UI (port 8501)
+  app-ui:
+    build: .
+    command: streamlit run app/main.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - CHROMA_PERSIST_DIR=/app/data/chroma_db
+      - DB_PATH=/app/data/documatch.db
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # FastAPI REST API (port 8000)
+  app-api:
+    build: .
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - CHROMA_PERSIST_DIR=/app/data/chroma_db
+      - DB_PATH=/app/data/documatch.db
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Ollama LLM server
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    # Auto-pull model on first start
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull phi3.5 && wait"]
+
+volumes:
+  app-data:
+    driver: local
+  ollama-data:
+    driver: local
