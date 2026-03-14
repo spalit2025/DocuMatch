@@ -5,18 +5,21 @@ Endpoints:
     POST /api/contracts/ingest  - Upload and index a contract PDF
     POST /api/pos/ingest        - Upload, extract, and index a PO PDF
     POST /api/invoices/process  - Upload, extract, validate an invoice PDF
+    GET  /api/results           - Query stored validation results
+    GET  /api/stats             - Aggregate processing statistics
     GET  /api/health            - System health check
 """
 
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from config import settings
+from core.database import Database
 from core.services import DocumentService, MatchService
 
-from .dependencies import get_document_service, get_extraction_engine, get_match_service
+from .dependencies import get_database, get_document_service, get_match_service
 from .schemas import (
     ComponentHealth,
     ContractIngestResponse,
@@ -26,6 +29,8 @@ from .schemas import (
     MatchDetailResponse,
     ParseInfo,
     POIngestResponse,
+    ResultResponse,
+    StatsResponse,
     ValidationIssueResponse,
     ValidationSummary,
 )
@@ -205,6 +210,58 @@ def process_invoice(
             ],
         ),
     )
+
+
+# ==================== RESULTS ====================
+
+
+@router.get(
+    "/results",
+    response_model=list[ResultResponse],
+    summary="Query validation results",
+    description="Retrieve stored validation results with optional filters by vendor, status, or job.",
+)
+def get_results(
+    vendor_name: Optional[str] = Query(None, description="Filter by vendor name"),
+    status: Optional[str] = Query(None, description="Filter by status: PASS, FAIL, or REVIEW"),
+    job_id: Optional[int] = Query(None, description="Filter by job ID"),
+    limit: int = Query(50, ge=1, le=500, description="Max results to return"),
+    db: Database = Depends(get_database),
+):
+    results = db.get_results(
+        vendor_name=vendor_name,
+        status=status,
+        job_id=job_id,
+        limit=limit,
+    )
+
+    return [
+        ResultResponse(
+            id=r.id,
+            job_id=r.job_id,
+            invoice_file=r.invoice_file,
+            vendor_name=r.vendor_name,
+            invoice_number=r.invoice_number,
+            status=r.status,
+            confidence=r.confidence,
+            matches_passed=r.matches_passed,
+            total_matches=r.total_matches,
+            created_at=r.created_at.isoformat() if r.created_at else "",
+        )
+        for r in results
+    ]
+
+
+@router.get(
+    "/stats",
+    response_model=StatsResponse,
+    summary="Processing statistics",
+    description="Get aggregate statistics: total jobs, pass/fail rates, pending counts.",
+)
+def get_stats(
+    db: Database = Depends(get_database),
+):
+    return StatsResponse(**db.get_stats())
 
 
 # ==================== HEALTH ====================

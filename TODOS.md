@@ -81,13 +81,16 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Why:** The single biggest credibility gap. Every serious AI product has an API.
 - **Depends on:** 2.1 Service Layer
 
-### 2.3 SQLite Metadata Store
-- [ ] Create `core/database.py` with SQLAlchemy models
-- [ ] Jobs table (id, type, status, created_at, completed_at, error)
-- [ ] Results table (id, job_id, invoice_file, vendor, status, confidence, details_json)
-- [ ] AuditLog table (id, action, entity_type, entity_id, timestamp, metadata)
-- [ ] Enable WAL mode (`PRAGMA journal_mode=WAL`) for concurrent access
-- [ ] Migration support (Alembic or simple versioned scripts)
+### 2.3 SQLite Metadata Store ✅ DONE
+- [x] Create `core/database.py` with SQLAlchemy models
+- [x] Jobs table (id, type, status, file_name, vendor_name, created_at, completed_at, error)
+- [x] Results table (id, job_id, invoice_file, vendor, invoice_number, status, confidence, matches_passed, total_matches, details_json)
+- [x] AuditLog table (id, action, entity_type, entity_id, timestamp, metadata_json)
+- [x] Enable WAL mode (`PRAGMA journal_mode=WAL`) + busy_timeout for concurrent access
+- [x] Database manager class with CRUD operations, stats, and audit logging
+- [x] GET /api/results and GET /api/stats API endpoints wired up
+- [x] 34 database tests (init, jobs, results, audit, stats, concurrency)
+- [ ] Migration support (Alembic) - deferred until schema stabilizes
 - **Effort:** M (4-6 hours)
 - **Why:** Structured data needs a structured store. Enables history, analytics, audit trail.
 

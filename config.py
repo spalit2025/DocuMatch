@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     invoices_dir: str = "./data/invoices"
     purchase_orders_dir: str = "./data/purchase_orders"
 
+    # SQLite Database
+    db_path: str = "./data/documatch.db"
+
     # Three-Way Matching Configuration
     match_tolerance: float = 0.01  # 1% tolerance for amount comparisons
 

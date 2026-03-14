@@ -9,6 +9,7 @@ This package contains the core modules:
 - matcher: Invoice-Contract-PO three-way validation logic
 - models: Pydantic data models
 - services: Orchestration layer (DocumentService, MatchService)
+- database: SQLite metadata store (jobs, results, audit log)
 """
 
 from .models import (
@@ -30,6 +31,7 @@ from .extraction import ExtractionEngine, ExtractionError, extract_invoice, extr
 from .matcher import Matcher, validate_invoice, validate_invoice_three_way
 from .report_generator import generate_report, generate_three_way_report
 from .services import DocumentService, DocumentProcessingError, MatchService
+from .database import Database, Job, Result, AuditLog
 
 __all__ = [
     # Models
@@ -66,4 +68,9 @@ __all__ = [
     "DocumentService",
     "DocumentProcessingError",
     "MatchService",
+    # Database
+    "Database",
+    "Job",
+    "Result",
+    "AuditLog",
 ]

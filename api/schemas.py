@@ -121,6 +121,38 @@ class HealthResponse(BaseModel):
     components: dict[str, ComponentHealth]
 
 
+# ==================== RESULTS ====================
+
+
+class ResultResponse(BaseModel):
+    """A stored validation result."""
+
+    id: int
+    job_id: int
+    invoice_file: Optional[str] = None
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    status: Optional[str] = None
+    confidence: Optional[float] = None
+    matches_passed: Optional[int] = None
+    total_matches: Optional[int] = None
+    created_at: str
+
+
+class StatsResponse(BaseModel):
+    """Aggregate statistics for the dashboard."""
+
+    total_jobs: int
+    completed_jobs: int
+    failed_jobs: int
+    pending_jobs: int
+    total_results: int
+    pass_count: int
+    fail_count: int
+    review_count: int
+    pass_rate: float
+
+
 # ==================== ERRORS ====================
 
 

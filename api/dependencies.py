@@ -8,6 +8,7 @@ Uses functools.lru_cache for singleton behavior.
 from functools import lru_cache
 
 from config import settings
+from core.database import Database
 from core.extraction import ExtractionEngine
 from core.matcher import Matcher
 from core.parser_engine import ParserEngine
@@ -66,3 +67,8 @@ def get_document_service() -> DocumentService:
 @lru_cache
 def get_match_service() -> MatchService:
     return MatchService(matcher=get_matcher())
+
+
+@lru_cache
+def get_database() -> Database:
+    return Database(db_path=settings.db_path)
