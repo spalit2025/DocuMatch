@@ -1,19 +1,20 @@
 """
 Tests for MatchService.
 
-Tests that MatchService correctly delegates to Matcher
-and propagates results. Core matching logic is tested
-separately in test_matcher.py and test_three_way_match.py.
+Tests delegation to Matcher, auto PO matching, and report generation.
+Core matching logic is tested separately in test_matcher.py and
+test_three_way_match.py.
 """
 
 import pytest
 from unittest.mock import MagicMock
 
-from core.services.match_service import MatchService
+from core.services.match_service import MatchService, POMatchResult
 from core.models import (
     InvoiceSchema,
     LineItem,
     MatchResult,
+    PurchaseOrderSchema,
     ThreeWayMatchResult,
     MatchDetail,
     ValidationIssue,
@@ -31,6 +32,33 @@ def sample_invoice():
         invoice_date="2024-01-15",
         total_amount=5000.00,
         po_number="PO-001",
+        line_items=[
+            LineItem(description="Consulting", quantity=40, unit_price=125.00, total=5000.00)
+        ],
+    )
+
+
+@pytest.fixture
+def sample_invoice_no_po():
+    return InvoiceSchema(
+        vendor_name="Acme Corp",
+        invoice_number="INV-002",
+        invoice_date="2024-01-15",
+        total_amount=5000.00,
+        po_number=None,
+        line_items=[
+            LineItem(description="Consulting", quantity=40, unit_price=125.00, total=5000.00)
+        ],
+    )
+
+
+@pytest.fixture
+def sample_po():
+    return PurchaseOrderSchema(
+        po_number="PO-001",
+        vendor_name="Acme Corp",
+        order_date="2024-01-10",
+        total_amount=5000.00,
         line_items=[
             LineItem(description="Consulting", quantity=40, unit_price=125.00, total=5000.00)
         ],
@@ -84,7 +112,17 @@ def mock_matcher(mock_match_result, mock_three_way_result):
 
 
 @pytest.fixture
-def service(mock_matcher):
+def mock_po_store():
+    return MagicMock()
+
+
+@pytest.fixture
+def service(mock_matcher, mock_po_store):
+    return MatchService(mock_matcher, po_store=mock_po_store)
+
+
+@pytest.fixture
+def service_no_po_store(mock_matcher):
     return MatchService(mock_matcher)
 
 
@@ -129,16 +167,167 @@ class TestValidateThreeWay:
             sample_invoice, "PO-001"
         )
 
-    def test_without_po_number(self, service, mock_matcher, sample_invoice):
-        service.validate_three_way(sample_invoice)
+    def test_explicit_po_skips_auto_match(self, service, mock_po_store, sample_invoice):
+        """When po_number is explicitly provided, auto-match is skipped."""
+        service.validate_three_way(sample_invoice, po_number="PO-EXPLICIT")
+
+        mock_po_store.get_po_by_number.assert_not_called()
+        mock_po_store.get_pos_by_vendor.assert_not_called()
+
+    def test_auto_match_exact(self, service, mock_matcher, mock_po_store, sample_invoice_no_po):
+        """Auto-match finds PO via invoice.po_number."""
+        # invoice_no_po has no po_number, but let's give it one
+        sample_invoice_no_po.po_number = "PO-AUTO"
+        mock_po_store.get_po_by_number.return_value = PurchaseOrderSchema(
+            po_number="PO-AUTO", vendor_name="Acme Corp",
+            order_date="2024-01-10", total_amount=5000.00,
+        )
+
+        service.validate_three_way(sample_invoice_no_po)
+
+        # Should pass auto-matched PO number to matcher
+        mock_matcher.validate_invoice_three_way.assert_called_once_with(
+            sample_invoice_no_po, "PO-AUTO"
+        )
+
+    def test_auto_match_fuzzy(self, service, mock_matcher, mock_po_store, sample_invoice_no_po):
+        """Auto-match finds PO via vendor + amount fuzzy match."""
+        mock_po_store.get_po_by_number.return_value = None
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-FUZZY", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=5000.00,
+            )
+        ]
+
+        service.validate_three_way(sample_invoice_no_po)
 
         mock_matcher.validate_invoice_three_way.assert_called_once_with(
-            sample_invoice, None
+            sample_invoice_no_po, "PO-FUZZY"
+        )
+
+    def test_auto_match_no_result_falls_back(self, service, mock_matcher, mock_po_store, sample_invoice_no_po):
+        """When auto-match finds nothing, falls back to two-way."""
+        mock_po_store.get_po_by_number.return_value = None
+        mock_po_store.get_pos_by_vendor.return_value = []
+
+        service.validate_three_way(sample_invoice_no_po)
+
+        # Called with None po_number (two-way)
+        mock_matcher.validate_invoice_three_way.assert_called_once_with(
+            sample_invoice_no_po, None
         )
 
     def test_returns_matcher_result(self, service, sample_invoice, mock_three_way_result):
-        result = service.validate_three_way(sample_invoice)
+        result = service.validate_three_way(sample_invoice, po_number="PO-001")
         assert result is mock_three_way_result
+
+
+# ==================== AUTO PO MATCHING ====================
+
+
+class TestAutoMatchPO:
+    """Tests for MatchService.auto_match_po()."""
+
+    def test_no_po_store(self, service_no_po_store, sample_invoice):
+        result = service_no_po_store.auto_match_po(sample_invoice)
+        assert result.po_number is None
+        assert result.match_method is None
+
+    def test_exact_match(self, service, mock_po_store, sample_invoice):
+        """Exact match by invoice.po_number."""
+        mock_po_store.get_po_by_number.return_value = PurchaseOrderSchema(
+            po_number="PO-001", vendor_name="Acme Corp",
+            order_date="2024-01-10", total_amount=5000.00,
+        )
+
+        result = service.auto_match_po(sample_invoice)
+        assert result.po_number == "PO-001"
+        assert result.match_method == "exact"
+        assert result.confidence == 1.0
+
+    def test_exact_match_not_found_falls_to_fuzzy(self, service, mock_po_store, sample_invoice):
+        """PO number on invoice doesn't exist, falls through to fuzzy."""
+        mock_po_store.get_po_by_number.return_value = None
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-FUZZY", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=5000.00,
+            )
+        ]
+
+        result = service.auto_match_po(sample_invoice)
+        assert result.po_number == "PO-FUZZY"
+        assert result.match_method == "fuzzy"
+
+    def test_fuzzy_match_single_candidate(self, service, mock_po_store, sample_invoice_no_po):
+        """Single vendor PO with matching amount -> fuzzy match."""
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-MATCH", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=5050.00,  # Within 5% tolerance
+            )
+        ]
+
+        result = service.auto_match_po(sample_invoice_no_po)
+        assert result.po_number == "PO-MATCH"
+        assert result.match_method == "fuzzy"
+        assert result.confidence >= 0.5
+
+    def test_fuzzy_match_amount_too_different(self, service, mock_po_store, sample_invoice_no_po):
+        """PO amount differs by more than 5% -> no match."""
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-FAR", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=7000.00,  # 40% diff
+            )
+        ]
+
+        result = service.auto_match_po(sample_invoice_no_po)
+        assert result.po_number is None
+        assert result.candidates == 1
+
+    def test_fuzzy_match_multiple_candidates(self, service, mock_po_store, sample_invoice_no_po):
+        """Multiple POs match the amount -> don't guess, return None."""
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-A", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=5000.00,
+            ),
+            PurchaseOrderSchema(
+                po_number="PO-B", vendor_name="Acme Corp",
+                order_date="2024-02-10", total_amount=5000.00,
+            ),
+        ]
+
+        result = service.auto_match_po(sample_invoice_no_po)
+        assert result.po_number is None
+        assert result.candidates == 2
+
+    def test_fuzzy_match_no_vendor_pos(self, service, mock_po_store, sample_invoice_no_po):
+        """No POs for vendor -> no match."""
+        mock_po_store.get_pos_by_vendor.return_value = []
+
+        result = service.auto_match_po(sample_invoice_no_po)
+        assert result.po_number is None
+        assert result.candidates == 0
+
+    def test_fuzzy_match_zero_amount(self, service, mock_po_store):
+        """Both invoice and PO have zero amount -> match."""
+        invoice = InvoiceSchema(
+            vendor_name="Acme Corp", invoice_number="INV-ZERO",
+            invoice_date="2024-01-15", total_amount=0.0,
+        )
+        mock_po_store.get_pos_by_vendor.return_value = [
+            PurchaseOrderSchema(
+                po_number="PO-ZERO", vendor_name="Acme Corp",
+                order_date="2024-01-10", total_amount=0.0,
+            )
+        ]
+
+        result = service.auto_match_po(invoice)
+        assert result.po_number == "PO-ZERO"
+        assert result.confidence == 0.5
 
 
 # ==================== REPORT GENERATION ====================

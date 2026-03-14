@@ -66,7 +66,7 @@ def get_document_service() -> DocumentService:
 
 @lru_cache
 def get_match_service() -> MatchService:
-    return MatchService(matcher=get_matcher())
+    return MatchService(matcher=get_matcher(), po_store=get_po_store())
 
 
 @lru_cache

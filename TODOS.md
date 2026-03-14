@@ -109,12 +109,13 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Why:** Processing 50 invoices with a dashboard is the hero demo. Shows production engineering.
 - **Depends on:** 2.1, 2.2, 2.3
 
-### 2.5 Auto PO Matching
-- [ ] Use extracted invoice.po_number to auto-lookup PO from POStore
-- [ ] Fallback: fuzzy match on vendor_name + total_amount via POStore.get_pos_by_vendor()
-- [ ] If 1 fuzzy match found, use it; if 0 or 2+, prompt manual selection
-- [ ] Show match confidence with manual override option
-- [ ] Update three-way matching to use auto-matched PO
+### 2.5 Auto PO Matching ✅ DONE
+- [x] Use extracted invoice.po_number to auto-lookup PO from POStore (exact match)
+- [x] Fallback: fuzzy match on vendor_name + total_amount (5% tolerance) via POStore.get_pos_by_vendor()
+- [x] If 1 fuzzy match found, use it; if 0 or 2+, skip (two-way only)
+- [x] POMatchResult with confidence score and match method
+- [x] Auto-match integrated into MatchService.validate_three_way()
+- [x] 11 new auto PO matching tests (exact, fuzzy, edge cases)
 - **Effort:** S (2-3 hours)
 - **Why:** Makes the product feel intelligent. Removes manual dropdown friction.
 
