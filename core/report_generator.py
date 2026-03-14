@@ -106,7 +106,9 @@ def generate_three_way_report(result: ThreeWayMatchResult) -> str:
     def match_status(m):
         if m is None:
             return "\u26aa N/A"
-        return f"{'\u2705' if m.passed else '\u274c'} {'PASS' if m.passed else 'FAIL'} ({m.score:.0%})"
+        icon = "\u2705" if m.passed else "\u274c"
+        label = "PASS" if m.passed else "FAIL"
+        return f"{icon} {label} ({m.score:.0%})"
 
     lines.append(f"  Match 1 (Invoice \u2194 PO):       {match_status(result.invoice_po_match)}")
     lines.append(f"  Match 2 (Invoice \u2194 Contract): {match_status(result.invoice_contract_match)}")
