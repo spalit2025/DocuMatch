@@ -163,15 +163,20 @@ Primary objective: Portfolio-grade AI-native product + SaaS exploration.
 - **Why:** Test quality is as visible as code quality. Non-negotiable for portfolio.
 - **Depends on:** 2.2 FastAPI
 
-### 3.4 README Overhaul
-- [ ] Hero GIF showing batch processing dashboard
-- [ ] Updated architecture diagram (expanded architecture)
-- [ ] "Why I Built This" narrative section
-- [ ] Quick start with Docker Compose
-- [ ] API documentation link
-- [ ] Screenshots of key workflows
-- [ ] Benchmark/eval results table
-- [ ] Tech stack with brief rationale for each choice
+### 3.4 README Overhaul ✅ DONE
+- [x] Updated architecture diagram (full system: UI, API, services, data layer)
+- [x] Processing pipeline diagram
+- [x] "Why I Built This" narrative section
+- [x] Quick start with Docker Compose AND local development
+- [x] API documentation with curl examples for all endpoints
+- [x] Key features table
+- [x] Tech stack with rationale for each choice
+- [x] Testing section with per-suite commands
+- [x] Project structure tree
+- [x] CI badge
+- [ ] Hero GIF (needs running instance for recording)
+- [ ] Screenshots of key workflows (needs running instance)
+- [ ] Benchmark/eval results table (Phase 4)
 - **Effort:** M (3-4 hours)
 - **Why:** The README IS the product page. This is where portfolio visitors form their opinion.
 - **Depends on:** Everything else (do last)
